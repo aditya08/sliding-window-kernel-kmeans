@@ -1,42 +1,28 @@
 import torch
-import pandas as pd
-import numpy as np
 import time
-class KernelKMeans:
+from typing import Optional
 
-    def __init__(self, n_clusters=3, max_iter=100, kernel='rbf', gamma=None, device='cpu'):
-        self.n_clusters = n_clusters
-        self.max_iter = max_iter
-        self.kernel = kernel
-        self.gamma = gamma
-        self.device = device
-        self.X = None
-        self.ground_truth = None
+from kmeans import Kmeans
+from dataset import Dataset
+from kernel_functions import KernelFunction
 
-    def read_csv(self, filepath, device='cpu'):
-        df = pd.read_csv(filepath, header=None)
-        self.X = torch.tensor(df.iloc[1:,:-1].values.astype(np.float32), dtype=torch.float32, device=device)
-        self.ground_truth = torch.tensor(df.iloc[1:,-1].values.astype(np.int64), dtype=torch.int64, device=device)
+class KmeansGD(Kmeans):
 
-    def _kernel_function(self, Y=None):
-        if self.kernel == 'linear':
-            if Y is None:
-                Y = self.X
-            return torch.mm(self.X, Y.t())
-        elif self.kernel == 'rbf':
-            if Y is None:
-                Y = self.X
-            X_norm = (self.X ** 2).sum(1).view(-1, 1)
-            Y_norm = (Y ** 2).sum(1).view(1, -1)
-            K = X_norm + Y_norm - 2.0 * torch.mm(self.X, Y.t())
-            gamma = self.gamma if self.gamma is not None else 1.0 / self.X.shape[1]
-            return torch.exp(-gamma * K)
-        else:
-            raise ValueError('Unsupported kernel')
+    def __init__(self, n_clusters: int, dataset: Dataset, kernel: KernelFunction, max_iter: int = 100, device='cpu') -> None:
+        """
+        Initializes the KernelKMeans class with parameters for clustering.
+        Args:
+            n_clusters (int): Number of clusters to form.
+            max_iter (int): Maximum number of iterations for convergence.
+            dataset (Dataset): Dataset object containing data and ground truth.
+            kernel (KernelFunction): Kernel function to use for clustering.
+            device (str): Device to run computations on ('cpu' or 'cuda').
+        """
+        super().__init__(n_clusters, dataset, kernel, max_iter=max_iter, device=device)
 
     def fit(self):
-        n_samples = self.X.shape[0]
-        K = self._kernel_function(self.X)
+        K = self.kernel(self.dataset)
+        n_samples = self.dataset.shape[0]
         labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
         for _ in range(self.max_iter):
             dist = torch.zeros((n_samples, self.n_clusters), device=self.device)
@@ -54,11 +40,10 @@ class KernelKMeans:
                 break
             labels = new_labels
         self.labels_ = labels.cpu().numpy()
-        return self
 
-    def fit_matrix_form(self):
-        n_samples = self.X.shape[0]
-        K = self._kernel_function(self.X)
+    def __fit_matrix_form(self):
+        K = self.kernel(self.dataset)
+        n_samples = self.dataset.shape[0]
         colidx = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
         vals = torch.ones(n_samples, device=self.device)
         rowidx = torch.arange(self.n_clusters, device=self.device)
