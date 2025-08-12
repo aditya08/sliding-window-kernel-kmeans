@@ -1,6 +1,4 @@
-import time
 import torch
-from typing import Optional
 
 from dataset import Dataset
 
@@ -14,7 +12,7 @@ class KernelFunction:
         """
         self.kernel_type = kernel_type
 
-    def __call__(self, dataset: Dataset) -> torch.Tensor:
+    def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
         Computes the kernel matrix for the given dataset.
         Args:
@@ -29,32 +27,35 @@ class RBF(KernelFunction):
         super().__init__('rbf')
         self.gamma = gamma
 
-    def __call__(self, dataset: Dataset) -> torch.Tensor:
+    def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
-        Computes the RBF kernel matrix for the given dataset.
+        Computes the RBF kernel matrix between two tensors.
         Args:
-            dataset (Dataset): Dataset object containing data.
+            X (torch.Tensor): First tensor.
+            Y (torch.Tensor): Second tensor.
         Returns:
-            torch.Tensor: RBF kernel matrix.
+            torch.Tensor: RBF kernel matrix between X and Y.
         """
-        X = dataset.data
-        sq_dists = torch.cdist(X, X) ** 2
+        sq_dists = torch.cdist(X, Y) ** 2
         return torch.exp(-self.gamma * sq_dists)
+
+    def __repr__(self):
+        return f"RBF(gamma={self.gamma})"
 
 class Linear(KernelFunction):
     def __init__(self):
         super().__init__('linear')
 
-    def __call__(self, dataset: Dataset) -> torch.Tensor:
+    def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
         Computes the linear kernel matrix for the given dataset.
         Args:
-            dataset (Dataset): Dataset object containing data.
+            X (torch.Tensor): First tensor.
+            Y (torch.Tensor): Second tensor.
         Returns:
             torch.Tensor: Linear kernel matrix.
         """
-        X = dataset.data
-        return X.dot(X.t())
+        return X.dot(Y.t())
 
 class Tanh(KernelFunction):
     def __init__(self, alpha=1.0, beta=0.0):
@@ -62,16 +63,16 @@ class Tanh(KernelFunction):
         self.alpha = alpha
         self.beta = beta
 
-    def __call__(self, dataset: Dataset) -> torch.Tensor:
+    def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
-        Computes the tanh kernel matrix for the given dataset.
+        Computes the tanh kernel matrix between two tensors.
         Args:
-            dataset (Dataset): Dataset object containing data.
+            X (torch.Tensor): First tensor.
+            Y (torch.Tensor): Second tensor.
         Returns:
             torch.Tensor: Tanh kernel matrix.
         """
-        X = dataset.data
-        return torch.tanh(self.alpha * X.dot(X.t()) + self.beta)
+        return torch.tanh(self.alpha * X.dot(Y.t()) + self.beta)
 
 class Polynomial(KernelFunction):
     def __init__(self, degree=2, coef0=1.0):
@@ -79,13 +80,13 @@ class Polynomial(KernelFunction):
         self.degree = degree
         self.coef0 = coef0
 
-    def __call__(self, dataset: Dataset) -> torch.Tensor:
+    def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
         Computes the polynomial kernel matrix for the given dataset.
         Args:
-            dataset (Dataset): Dataset object containing data.
+            X (torch.Tensor): First tensor.
+            Y (torch.Tensor): Second tensor.
         Returns:
             torch.Tensor: Polynomial kernel matrix.
         """
-        X = dataset.data
-        return (X.dot(X.t()) + self.coef0) ** self.degree
+        return (X.dot(Y.t()) + self.coef0) ** self.degree

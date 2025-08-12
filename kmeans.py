@@ -1,10 +1,9 @@
-from typing import Optional
-
+from abc import abstractmethod
 from kernel_functions import KernelFunction
 from dataset import Dataset
 
 class Kmeans:
-    def __init__(self, n_clusters: int, dataset: Dataset, kernel: KernelFunction, max_iter: int = 100, device: str = "cpu") -> None:
+    def __init__(self, n_clusters: int, dataset: Dataset, kernel: KernelFunction, max_iter: int = 100, tol: float = 1e-6, device: str = "cpu") -> None:
         """
         Initializes the Kmeans class with parameters for clustering.
         Args:
@@ -19,7 +18,9 @@ class Kmeans:
         self.device = device
         self.dataset = dataset
         self.kernel = kernel
+        self.tol = tol
 
+    @abstractmethod
     def fit(self) -> None:
         """
         Fit the Kmeans model to the dataset.
@@ -27,6 +28,7 @@ class Kmeans:
         """
         pass  # Implementation of fit is deferred.
 
+    @abstractmethod
     def predict(self) -> None:
         """
         Predict the cluster labels for the dataset.
