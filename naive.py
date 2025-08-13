@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from kmeans import Kmeans
 from dataset import Dataset
-from kernel_functions import KernelFunction, RBF
+from kernel_functions import KernelFunction
 
 class KmeansNaive(Kmeans):
 
@@ -57,6 +57,8 @@ class KmeansNaive(Kmeans):
 
 # Example usage:
 if __name__ == "__main__":
+    from kernel_functions import RBF
+    
     torch.random.manual_seed(42)
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')

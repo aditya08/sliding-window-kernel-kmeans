@@ -4,7 +4,7 @@ import time
 
 from kmeans import Kmeans
 from dataset import Dataset
-from kernel_functions import KernelFunction, RBF
+from kernel_functions import KernelFunction
 
 class KmeansMatrix(Kmeans):
 
@@ -28,7 +28,7 @@ class KmeansMatrix(Kmeans):
         V_sum = V.sum(0).unsqueeze(0)  # (1, n_clusters) vector
         K = self.kernel(X, X)  # (n_samples, n_samples) kernel matrix
         K_diag = K.diag().unsqueeze(1)  # (n_samples, 1) diagonal of K
-        tr_K = torch.trace(K)
+        tr_K = K_diag.sum()
         objective = 0.0
         prev_objective = 0.0
         for _ in range(self.max_iter):
@@ -56,6 +56,7 @@ class KmeansMatrix(Kmeans):
 
 # Example usage:
 if __name__ == "__main__":
+    from kernel_functions import RBF
     torch.random.manual_seed(42)
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')

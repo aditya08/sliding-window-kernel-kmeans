@@ -1,11 +1,12 @@
 import time
 import torch
+import torch.nn.functional as F
 
 from kmeans import Kmeans
 from dataset import Dataset
 from kernel_functions import KernelFunction
 
-class KmeansBCD(Kmeans):
+class KmeansStreaming(Kmeans):
     def __init__(self, n_clusters: int, dataset: Dataset, kernel: KernelFunction, max_iter: int = 100, tol: float = 1e-6, block_size: int = 16, device: str = "cpu") -> None:
         """
         Initializes the KmeansBCD class with parameters for clustering using Block Coordinate Descent.
@@ -27,18 +28,60 @@ class KmeansBCD(Kmeans):
         """
         if self.dataset is None:
             raise ValueError("Dataset must be provided for fitting.")
-
-        self.X = self.dataset.data
-        n_samples, n_features = self.X.shape
-        labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
+        X = self.dataset.data
+        n_samples = self.dataset.shape[0]
+        self.labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
+        new_labels = self.labels.clone()
+        V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
+        V_sum = V.sum(0).unsqueeze(0)
+        K_diag = self.kernel(X, X, diag=True).unsqueeze(1)
+        tr_K = K_diag.sum()
+        prev_objective = 0.0
         for _ in range(self.max_iter):
-            # Update cluster centers
-            centers = torch.zeros((self.n_clusters, n_features), device=self.device)
-            counts = torch.zeros(self.n_clusters, device=self.device)
-
+            objective = tr_K.item()
+            for start in range(0, n_samples, self.block_size):
+                end = min(start + self.block_size, n_samples)
+                counts = torch.clamp(V_sum, min=1)
+                KV = (self.kernel(X[start:end], X) @ V) / counts
+                sampled_KV = (KV * V[start:end])
+                dist = K_diag[start:end] - (2 * KV) + (sampled_KV.sum(0) / counts)
+                new_labels_block = dist.argmin(1)
+                new_labels[start:end] = new_labels_block
+                # todo: benchmark whether convergence is better if we greedily update the cluster assignments after each block update
+                # V[start:end] = F.one_hot(new_labels_block, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
+                # V_sum = V.sum(0).unsqueeze(0)  # todo: this can be optimized further
+                objective -= sampled_KV.sum().item()
+            print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
+            if torch.equal(self.labels, new_labels) or abs(prev_objective - objective) < self.tol:
+                print("Cluster assignments are stable. Stopping iterations.")
+                self.labels = new_labels
+                break
+            self.labels = new_labels.clone()
+            # todo: handle the choice of when to update V and V_sum cleanly (maybe with a flag)
+            V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
+            V_sum = V.sum(0).unsqueeze(0)
+            prev_objective = objective
     def predict(self) -> None:
         """
         Predict the cluster labels for the dataset.
         This method returns the cluster labels for each data point.
         """
         raise NotImplementedError("Predict method is not implemented in KmeansBCD. Use fit method to obtain labels.")
+
+# Example usage:
+if __name__ == "__main__":
+    from kernel_functions import RBF
+    torch.random.manual_seed(42)
+    start_time = time.time()
+    dataset = Dataset("./data/acoustic", device='cpu')
+    end_time = time.time()
+    print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
+    kernel = RBF(gamma=0.5)
+    n_clusters = 10
+    block_size = 4096
+    print(f"Running Kernel K-means (streaming) with and block size {block_size}")
+    model = KmeansStreaming(n_clusters=n_clusters, dataset=dataset, kernel=kernel, block_size=block_size, max_iter=5, device='cpu')
+    start_time = time.time()
+    model.fit()
+    end_time = time.time()
+    print(f"Kernel K-means (streaming) execution time: {end_time - start_time:.4f} seconds")

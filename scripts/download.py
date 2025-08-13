@@ -41,7 +41,7 @@ def download_file(url, destination, remove_bz2=False):
 def main():
     parser = argparse.ArgumentParser(description="Download datasets for Kernel K-means.")
     parser.add_argument("dataset", choices=list(datasets.keys()) + ["all"], nargs="?", default="all", help="Name of the dataset to download (or 'all' for all datasets)")
-    parser.add_argument("--destination", type=str, default="./data", help="Destination directory for the downloaded file")
+    parser.add_argument("--destination", type=str, default="../data", help="Destination directory for the downloaded file")
     parser.add_argument("--remove-bz2", action="store_true", help="Remove .bz2 files after decompression")
 
     args = parser.parse_args()
