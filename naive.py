@@ -1,6 +1,6 @@
+import time
 import torch
 import torch.nn.functional as F
-import time
 
 from kmeans import Kmeans
 from dataset import Dataset
@@ -27,16 +27,17 @@ class KmeansNaive(Kmeans):
         K = self.kernel(X, X)
         tr_K = torch.trace(K)
         objective = 0.0
+        prev_objective = 0.0
         for _ in range(self.max_iter):
-            prev_objective = objective
             dist = torch.zeros((n_samples, self.n_clusters), device=self.device)
             for j in range(self.n_clusters):
                 mask = (self.labels == j)
                 count = torch.clamp(mask.sum(), min=1)  # Avoid division by zero
                 K_j = K[mask][:, mask]
-                sum_K_j = K[mask].sum(0)
-                dist[:, j] = K.diag() - 2 * sum_K_j / count + K_j.sum() / (count ** 2)
-                objective += K_j.sum().item() / count
+                sum_K = K[mask].sum(0)
+                sum_K_j = K_j.sum()
+                dist[:, j] = K.diag() - 2 * sum_K / count + sum_K_j / (count ** 2)
+                objective += sum_K_j.item() / count
             new_labels = dist.argmin(1)
             objective = tr_K - objective
             print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
@@ -45,6 +46,8 @@ class KmeansNaive(Kmeans):
                 self.labels = new_labels
                 break
             self.labels = new_labels
+            prev_objective = objective
+            objective = 0.0  # Reset objective for the next iteration
     def __fit_matrix_form(self):
         raise NotImplementedError("Matrix form from the Popcorn paper is not implemented.")
 
@@ -54,14 +57,15 @@ class KmeansNaive(Kmeans):
 
 # Example usage:
 if __name__ == "__main__":
+    torch.random.manual_seed(42)
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')
     end_time = time.time()
     print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
     kernel = RBF(gamma=0.5)
     n_clusters = 10
-    model = KmeansNaive(n_clusters=n_clusters, dataset=dataset, kernel=kernel, max_iter=20, device='cpu')
+    model = KmeansNaive(n_clusters=n_clusters, dataset=dataset, kernel=kernel, max_iter=5, device='cpu')
     start_time = time.time()
     model.fit()
     end_time = time.time()
-    print(f"Kernel K-means execution time: {end_time - start_time:.4f} seconds")
+    print(f"Kernel K-means (naive) execution time: {end_time - start_time:.4f} seconds")

@@ -24,40 +24,31 @@ class KmeansMatrix(Kmeans):
         X = self.dataset.data
         n_samples = self.dataset.shape[0]
         self.labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
-        V = F.one_hot(self.labels, num_classes=self.n_clusters)
-        K = self.kernel(X, X)
-        K_diag = K.diag()
+        V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
+        V_sum = V.sum(0).unsqueeze(0)  # (1, n_clusters) vector
+        K = self.kernel(X, X)  # (n_samples, n_samples) kernel matrix
+        K_diag = K.diag().unsqueeze(1)  # (n_samples, 1) diagonal of K
         tr_K = torch.trace(K)
         objective = 0.0
+        prev_objective = 0.0
         for _ in range(self.max_iter):
-            prev_objective = objective
-            V_sum = V.sum(0)
-            counts = torch.clamp(V_sum, min=1)  # Avoid division by zero
-            KV= K @ V
-            KVV = KV * V
-            dist = K_diag - (2  * KV / counts) + KVV.sum(0) / (counts ** 2)
-            new_labels = dist.argmin(1)
-            objective = (tr_K - (KVV.sum() / counts.sum())).item()
-            # print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
-            # Uncomment the following lines to see the detailed computation
-            # dist = torch.zeros((n_samples, self.n_clusters), device=self.device)
-            # for j in range(self.n_clusters):
-            #     mask = (self.labels == j)
-            #     count = torch.clamp(mask.sum(), min=1)  # Avoid division by zero
-            #     K_j = K[mask][:, mask]
-            #     sum_K_j = K[mask].sum(0)
-            #     dist[:, j] = K.diag() - 2 * sum_K_j / count + K_j.sum() / (count ** 2)
-            #     objective += K_j.sum().item() / count
-            # new_labels = dist.argmin(1)
-            # objective = tr_K - objective
+            # Avoid division by zero
+            counts = torch.clamp(V_sum, min=1)  # (1, n_clusters) vector
+            KV= (K @ V) / counts  # (n_samples, n_clusters) column subsampled kernel matrix
+            sampled_KV = (KV * V)  # (n_samples, n_clusters) row sampled kernel matrix
+            dist = K_diag - (2  * KV) + (sampled_KV.sum(0) / counts) # (n_samples, n_clusters) distance matrix
+            new_labels = dist.argmin(1)  # (n_samples,) new labels
+            objective = (tr_K - sampled_KV.sum()).item()
             print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
             if torch.equal(self.labels, new_labels) or abs(prev_objective - objective) < self.tol:
                 print("Cluster assignments are stable. Stopping iterations.")
                 self.labels = new_labels
                 break
             self.labels = new_labels
-    def __fit_matrix_form(self):
-        raise NotImplementedError("Matrix form from the Popcorn paper is not implemented.")
+            V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)  # (n_samples, n_clusters) cluster assignment matrix
+            V_sum = V.sum(0).unsqueeze(0)  # (1, n_clusters) vector
+            prev_objective = objective
+            objective = 0.0  # Reset objective for the next iteration
 
     def predict(self):
         # For kernel k-means, prediction is not straightforward without refitting
@@ -65,14 +56,15 @@ class KmeansMatrix(Kmeans):
 
 # Example usage:
 if __name__ == "__main__":
+    torch.random.manual_seed(42)
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')
     end_time = time.time()
     print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
     kernel = RBF(gamma=0.5)
     n_clusters = 10
-    model = KmeansNaive(n_clusters=n_clusters, dataset=dataset, kernel=kernel, max_iter=20, device='cpu')
+    model = KmeansMatrix(n_clusters=n_clusters, dataset=dataset, kernel=kernel, max_iter=5, device='cpu')
     start_time = time.time()
     model.fit()
     end_time = time.time()
-    print(f"Kernel K-means execution time: {end_time - start_time:.4f} seconds")
+    print(f"Kernel K-means (matrix form) execution time: {end_time - start_time:.4f} seconds")

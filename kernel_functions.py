@@ -1,8 +1,8 @@
 import torch
-
+from abc import ABC, abstractmethod
 from dataset import Dataset
 
-class KernelFunction:
+class KernelFunction(ABC):
     def __init__(self, kernel_type: str = 'rbf'):
         """
         Initializes the KernelFunction class with parameters for kernel computation.
@@ -12,6 +12,7 @@ class KernelFunction:
         """
         self.kernel_type = kernel_type
 
+    @abstractmethod
     def __call__(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         """
         Computes the kernel matrix for the given dataset.
@@ -20,7 +21,7 @@ class KernelFunction:
         Returns:
             torch.Tensor: empty torch tensor.
         """
-        return torch.empty(0)  # Placeholder for kernel computation
+        pass  # Implementation of kernel computation is deferred.
 
 class RBF(KernelFunction):
     def __init__(self, gamma):

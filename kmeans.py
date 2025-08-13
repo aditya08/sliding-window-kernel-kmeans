@@ -1,8 +1,9 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
+
 from kernel_functions import KernelFunction
 from dataset import Dataset
 
-class Kmeans:
+class Kmeans(ABC):
     def __init__(self, n_clusters: int, dataset: Dataset, kernel: KernelFunction, max_iter: int = 100, tol: float = 1e-6, device: str = "cpu") -> None:
         """
         Initializes the Kmeans class with parameters for clustering.

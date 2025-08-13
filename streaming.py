@@ -1,5 +1,5 @@
-import torch
 import time
+import torch
 
 from kmeans import Kmeans
 from dataset import Dataset
