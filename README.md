@@ -1,4 +1,4 @@
-# streaming-kernel-kmean
+# streaming-kernel-kmeans
 A PyTorch implementation of several different algorithmic variants to solve the Kernel K-means clustering problem.
 
 1. Naive implementation (computes full kernel matrix, single cluster update formulation)
