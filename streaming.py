@@ -30,6 +30,7 @@ class KmeansStreaming(Kmeans):
             raise ValueError("Dataset must be provided for fitting.")
         X = self.dataset.data
         n_samples = self.dataset.shape[0]
+        dist = torch.zeros(n_samples, self.n_clusters, device=self.device)
         self.labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
         new_labels = self.labels.clone()
         V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
@@ -39,18 +40,19 @@ class KmeansStreaming(Kmeans):
         prev_objective = 0.0
         for _ in range(self.max_iter):
             objective = tr_K.item()
+            counts = torch.clamp(V_sum, min=1)
+            sampled_KV_sum = 0
+            sampled_KV_sum0_accum = torch.zeros(1, self.n_clusters, device=self.device)
             for start in range(0, n_samples, self.block_size):
                 end = min(start + self.block_size, n_samples)
-                counts = torch.clamp(V_sum, min=1)
                 KV = (self.kernel(X[start:end], X) @ V) / counts
                 sampled_KV = (KV * V[start:end])
-                dist = K_diag[start:end] - (2 * KV) + (sampled_KV.sum(0) / counts)
-                new_labels_block = dist.argmin(1)
-                new_labels[start:end] = new_labels_block
-                # todo: benchmark whether convergence is better if we greedily update the cluster assignments after each block update
-                # V[start:end] = F.one_hot(new_labels_block, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
-                # V_sum = V.sum(0).unsqueeze(0)  # todo: this can be optimized further
-                objective -= sampled_KV.sum().item()
+                dist[start:end] = K_diag[start:end] - (2 * KV)
+                sampled_KV_sum0_accum += sampled_KV.sum(0) / counts
+                sampled_KV_sum += sampled_KV.sum().item()
+            objective -= sampled_KV_sum
+            dist += sampled_KV_sum0_accum
+            new_labels = dist.argmin(1)
             print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
             if torch.equal(self.labels, new_labels) or abs(prev_objective - objective) < self.tol:
                 print("Cluster assignments are stable. Stopping iterations.")
@@ -75,12 +77,13 @@ if __name__ == "__main__":
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')
     end_time = time.time()
+    print(dataset.shape)
     print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
     kernel = RBF(gamma=0.5)
     n_clusters = 10
-    block_size = 4096
-    print(f"Running Kernel K-means (streaming) with and block size {block_size}")
-    model = KmeansStreaming(n_clusters=n_clusters, dataset=dataset, kernel=kernel, block_size=block_size, max_iter=5, device='cpu')
+    block_size = 1024
+    print(f"Running Kernel K-means (streaming) with block size {block_size}")
+    model = KmeansStreaming(n_clusters=n_clusters, dataset=dataset, kernel=kernel, block_size=block_size, max_iter=10, device='cpu')
     start_time = time.time()
     model.fit()
     end_time = time.time()
