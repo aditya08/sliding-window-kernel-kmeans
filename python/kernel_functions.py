@@ -10,7 +10,6 @@ class KernelFunction(ABC):
         Initializes the KernelFunction class with parameters for kernel computation.
         Args:
             kernel_type (str): Type of kernel ('linear', 'rbf', 'tanh').
-            gamma (float, optional): Parameter for RBF kernel. If None, it is set to 1/n_features.
         """
         self.kernel_type = kernel_type
 

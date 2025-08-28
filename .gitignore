@@ -1,3 +1,5 @@
+lib/
+build/
 data/
 .vscode/
 # Byte-compiled / optimized / DLL files
