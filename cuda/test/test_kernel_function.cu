@@ -50,9 +50,15 @@ int test_kernel(const KernelType &kernel_type, const T tol = 1e-4) {
 }
 
 int main(int argc, char** argv) {
-    // single-precision tests
+    // Note: RBF kernel requires a higher tolerance because it uses the identity:
+    // ||a-b||^2_2 = ||a||^2 + ||b||^2 - 2<a,b> to cast the problem as a GEMM.
+    // This implementation is faster but less accurate.
+    // Similarly, the Polynomial kernel loses accuracy when the degree is large.
+    // Hence we use a higher absolute error tolerance for the double precision tests
     for (auto kernel_type : {KernelType::LINEAR, KernelType::RBF, KernelType::TANH, KernelType::POLYNOMIAL}) {
+        // single-precision tests
         int single_precision_test = test_kernel<float>(kernel_type);
+        // double-precision tests
         int double_precision_test = test_kernel<double>(kernel_type, 1e-6);
         if (single_precision_test != EXIT_SUCCESS) {
             std::cerr << "Single-precision test failed for kernel type: " << kernel_type << std::endl;
