@@ -23,12 +23,12 @@ __host__ void LinearKernel<T>::compute_kernel_matrix(const int m, const int n, c
 template <typename T>
 void compute_row_norms(const int rows, const int cols, const T* matrix, T* norms) {
     T sum = 0.0f;
-    for (int row = 0; row < rows; ++row) {
-        for (int col = 0; col < cols; ++col) {
-            T val = matrix[rows * col + row];
-            sum += val * val;
+    T val = 0.0f;
+    for (int col = 0; col < cols; ++col) {
+        for (int row = 0; row < rows; ++row) {
+            val = matrix[rows * col + row];
+            norms[row] += val * val;
         }
-        norms[row] = sum;
     }
 }
 
@@ -36,11 +36,8 @@ void compute_row_norms(const int rows, const int cols, const T* matrix, T* norms
 template <typename T>
 __host__ void RBFKernel<T>::compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal) {
     // Pre-compute norms of A and B
-    T* normA;
-    T* normB;
-    cudaMalloc(&normA, m * sizeof(T));
-    cudaMalloc(&normB, n * sizeof(T));
-
+    T* normA = static_cast<T*>(calloc(m , sizeof(T)));
+    T* normB = static_cast<T*>(calloc(n, sizeof(T)));
     // compute row-wise norms in parallel
     compute_row_norms(m, k, A, normA);
     compute_row_norms(n, k, B, normB);
@@ -61,8 +58,8 @@ __host__ void RBFKernel<T>::compute_kernel_matrix(const int m, const int n, cons
         C[i] = expf(-gamma * C[i]);
     }
 
-    cudaFree(normA);
-    cudaFree(normB);
+    free(normA);
+    free(normB);
 }
 
 // Specialization for Tanh Kernel
