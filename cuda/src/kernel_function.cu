@@ -21,15 +21,15 @@ __host__ void LinearKernel<T>::compute_kernel_matrix(const int m, const int n, c
 }
 
 template <typename T>
-void compute_row_norms(const int rows, const int cols, const T* matrix, T* norms) {
-    T sum = 0.0f;
-    T val = 0.0f;
-    for (int col = 0; col < cols; ++col) {
-        for (int row = 0; row < rows; ++row) {
-            val = matrix[rows * col + row];
-            norms[row] += val * val;
-        }
-    }
+__global__ void compute_row_norms(const int rows, const int cols, const T* matrix, T* norms) {
+    int row = threadIdx.x;
+    int col = blockIdx.x;
+    if (row >= rows || col >= cols) return;
+    T val = matrix[rows * col + row];
+    val *= val;
+    // TODO: add code branch to use cub reductions when rows is large
+    atomicAdd(&norms[row], val);
+
 }
 
 // Specialization for RBF Kernel
