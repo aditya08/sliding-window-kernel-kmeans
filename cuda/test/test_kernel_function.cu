@@ -32,7 +32,7 @@ int test_kernel(const KernelType &kernel_type, const T tol = 1e-4) {
         {KernelType::POLYNOMIAL, new T[25]{1.369289725145034,0.878669972705615,0.762362932226127,3.233774486698771,0.110573243743729,0.878669972705615,0.565446661125944,0.512782526237394,2.095873840684209,0.080350288285464,0.762362932226127,0.512782526237394,1.346628172120034,2.563059527109584,0.264288883284108,3.233774486698771,2.095873840684209,2.563059527109584,8.470492908235624,0.368109574660292,0.110573243743729,0.080350288285464,0.264288883284108,0.368109574660292,0.222170525182088}}
     };
     std::cout << "Computing Kernel Matrix for " << kern->get_kernel_name() << "\n";
-    kern->compute_kernel_matrix(m, m, n, A, m, A, m, C, m);
+    kern->compute_kernel_matrix(CUBLAS_OP_N, CUBLAS_OP_T, m, m, n, A, m, A, m, C, m);
     T* ref_C = ref_solutions[kernel_type];
     T error = 0.0;
     for (int i = 0; i < m; i++) {

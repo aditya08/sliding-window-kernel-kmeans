@@ -7,6 +7,7 @@ project(StreamingKernelKMeans LANGUAGES CUDA CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CUDA_ARCHITECTURES 80)
 
 # Find CUDA Toolkit (required)
 find_package(CUDAToolkit REQUIRED)

@@ -3,7 +3,9 @@
 
 #ifndef KERNEL_FUNCTION_CUH
 #define KERNEL_FUNCTION_CUH
+
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 enum KernelType : int {
     LINEAR = 0,
@@ -18,7 +20,7 @@ class KernelFunction {
   public:
   __host__ KernelFunction(): kernel_type(KernelType::UNDEFINED) {};
   __host__ virtual ~KernelFunction() = default;
-  __host__ virtual void compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc,  bool diagonal = false) = 0;
+  __host__ virtual void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc,  bool diagonal = false) = 0;
   __host__ std::string get_kernel_name() { return kernel_name; };
   protected:
     KernelType kernel_type;
@@ -34,7 +36,7 @@ class LinearKernel : public KernelFunction<T> {
         this->kernel_name = "Linear Kernel";
     }
     __host__ ~LinearKernel() {}
-    __host__ void compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
+    __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
 };
 
 template <typename T>
@@ -45,7 +47,7 @@ class RBFKernel : public KernelFunction<T> {
         this->kernel_name = "RBF Kernel";
     }
     __host__ ~RBFKernel() {}
-    __host__ void compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
+    __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T gamma;
 };
@@ -58,7 +60,7 @@ class TanhKernel : public KernelFunction<T> {
         this->kernel_name = "Tanh Kernel";
     }
     __host__ ~TanhKernel() {}
-    __host__ void compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
+    __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T alpha;
     T beta;
@@ -72,7 +74,7 @@ class PolynomialKernel : public KernelFunction<T> {
         this->kernel_name = "Polynomial Kernel";
     }
     __host__ ~PolynomialKernel() {}
-    __host__ void compute_kernel_matrix(const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
+    __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T alpha;
     T beta;
