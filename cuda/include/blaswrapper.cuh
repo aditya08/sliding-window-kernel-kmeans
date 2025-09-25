@@ -23,7 +23,7 @@ __host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int
     status = cublasDgemm(handle, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
     if (status != CUBLAS_STATUS_SUCCESS) {
         // Handle error
-      std::cerr << status <<  " CUBLAS SGEMM failed" << std::endl;
+      std::cerr << status <<  " CUBLAS DGEMM failed" << std::endl;
     }
     cublasDestroy(handle);
 }

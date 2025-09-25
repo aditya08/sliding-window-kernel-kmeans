@@ -21,38 +21,37 @@ __host__ void LinearKernel<T>::compute_kernel_matrix(cublasOperation_t OpA, cubl
 }
 
 template <typename T>
-__device__ void compute_row_norms(const int rows, const int cols, const T* matrix, T* norms) {
-
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__device__ void compute_row_norms(cublasOperation_t transpose, const int rows, const int cols, const T* matrix, T* norms) {
     int row = threadIdx.x;
-    int col = blockIdx.x;
-    if (row >= rows || col >= cols) return;
-    T val = matrix[rows * col + row];
-    val *= val;
-    // TODO: add code branch to use cub reductions for large norm computations
-    atomicAdd(&norms[row], val);
-
+    if (row >= rows) return;
+    norms[row] = 0.0f;
+    T val = 0.0f;
+    for (int col = 0; col < cols; ++col) {
+        val = matrix[row + rows*col];
+        norms[row] += val * val;
+    }
+    // printf("Row: %d, row-norm: %.16f\n", row, norms[row]);
 }
-// FIXME: rbf kernel and compute norms are only partially implemented
+
 template <typename T>
-__global__ void compute_rbf_transform(const int m, const int n, const int k, const T* A, const T* B, T* matrix, const T gamma) {
+__global__ void compute_rbf_transform(cublasOperation_t transA, cublasOperation_t transB, const int m, const int n, const int k, const T* A, const T* B, T* normA, T* normB, T* matrix, const T gamma) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= m*n) return;
-    T* normA = static_cast<T*>(malloc(m * sizeof(T)));
-    compute_row_norms(m, k, A, normA);
-    T * normB;
+    compute_row_norms(transA, m, k, A, normA);
     if (A != B) {
-        T* normB = static_cast<T*>(malloc(n * sizeof(T)));
-        compute_row_norms(n, k, B, normB);
+        compute_row_norms(transB, n, k, B, normB);
     }
-    else {
-        normB = normA;
-    }
-    int row = idx / n;
-    int col = idx % n;
-    T val = normA[row] + normB[col];
-    atomicAdd(&matrix[idx], val);
-    matrix[idx] = expf(-gamma * matrix[idx]);
+    int row = idx % m;
+    int col = idx / m;
+    // printf("Idx: %d Row: %d Col: %d, gamma: %.2f\n", idx, row, col, gamma);
+
+    T val = normA[row] + normB[col] + matrix[idx];
+    // if (row == 0 && col == 1){
+    //     printf("normA: %.16f, normB: %.16f, dot: %.16f, val: %.16f\n", normA[row], normB[col], matrix[idx], val);
+    //     printf("Exp argument: %.16f\n", -gamma * val);
+    //     printf("Exp value: %.16f\n", expf(-gamma * val));
+    // }
+    matrix[idx] = expf(-gamma * val);
 }
 
 // Specialization for RBF Kernel
@@ -63,18 +62,30 @@ __host__ void RBFKernel<T>::compute_kernel_matrix(cublasOperation_t OpA, cublasO
     const T alpha_dist = -2.0f;
     const T ZERO = 0.0f;
     gemm(OpA, OpB, m, n, k, &alpha_dist, A, lda, B, ldb, &ZERO, C, ldc);
-    T *devA, *devB, *devC;
+    T *devA, *devB, *devC, *devNormsA, *devNormsB;
     cudaMalloc(&devA, m * k * sizeof(T));
-    cudaMalloc(&devB, n * k * sizeof(T));
-    cudaMalloc(&devC, m * n * sizeof(T));
+    cudaMalloc(&devNormsA, m * sizeof(T));
     cudaMemcpy(devA, A, m * k * sizeof(T), cudaMemcpyHostToDevice);
-    cudaMemcpy(devB, B, n * k * sizeof(T), cudaMemcpyHostToDevice);
+    if (A != B){
+        cudaMalloc(&devB, n * k * sizeof(T));
+        cudaMemcpy(devB, B, n * k * sizeof(T), cudaMemcpyHostToDevice);
+        cudaMalloc(&devNormsB, n * sizeof(T));
+    }
+    else {
+        devB = devA;
+        devNormsB = devNormsA;
+    }
+    cudaMalloc(&devC, m * n * sizeof(T));
     cudaMemcpy(devC, C, m * n * sizeof(T), cudaMemcpyHostToDevice);
     // Apply the RBF kernel transformation
-    compute_rbf_transform<<<(m*n + 255)/256, 256>>>(m, n, k, devA, devB, devC, gamma);
+    compute_rbf_transform<<<(m*n + 255)/256, 256>>>(OpA, OpB, m, n, k, devA, devB, devNormsA, devNormsB, devC, gamma);
     cudaMemcpy(C, devC, m * n * sizeof(T), cudaMemcpyDeviceToHost);
     cudaFree(devA);
-    cudaFree(devB);
+    cudaFree(devNormsA);
+    if (A != B){
+        cudaFree(devB);
+        cudaFree(devNormsB);
+    }
     cudaFree(devC);
 }
 
