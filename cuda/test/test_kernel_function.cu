@@ -5,7 +5,7 @@
 
 #include "kernel_function.cuh"
 
-
+/* TODO: convert matrices into row-major format*/
 template <typename T>
 int test_kernel(const KernelType &kernel_type, const T tol = 1e-4) {
     std::unique_ptr<KernelFunction<T>> kern;

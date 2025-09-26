@@ -6,6 +6,8 @@
 #include "blaswrapper.cuh"
 #include "kernel_function.cuh"
 
+/* TODO: convert matrices into row-major format*/
+
 // Specialization for Linear Kernel
 template <typename T>
 __host__ void LinearKernel<T>::compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal) {
