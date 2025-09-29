@@ -18,10 +18,10 @@ __host__ void check_labels(const int* labels, const int* prev_labels, const int 
         return;
     }
     labels_converged = true;
+    #pragma omp parallel for schedule(static) reduction(&:labels_converged)
     for (int i = 0; i < n_samples; i++) {
         if (labels[i] != prev_labels[i]) {
             labels_converged = false;
-            break;
         }
     }
 }
@@ -29,6 +29,7 @@ __host__ void check_labels(const int* labels, const int* prev_labels, const int 
 __host__ void random_label_initialization(int* labels, const int n_samples, const int n_clusters, int seed=42) {
     std::mt19937 gen(seed);
     std::uniform_int_distribution<int> dis(0, n_clusters - 1);
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_samples; i++) {
         labels[i] = dis(gen);
     }
