@@ -18,7 +18,7 @@ __host__ void LinearKernel<T>::compute_kernel_matrix(cublasOperation_t OpA, cubl
     else {
         const T ONE = 1.0f;
         const T ZERO = 0.0f;
-        gemm(CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &ONE, A, lda, B, ldb, &ZERO, C, ldc);
+        gemm(OpA, OpB, m, n, k, &ONE, A, lda, B, ldb, &ZERO, C, ldc);
     }
 }
 
