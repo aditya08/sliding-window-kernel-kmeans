@@ -1,6 +1,6 @@
 lib/
 build/
-data/
+python/data/
 .vscode/
 # Byte-compiled / optimized / DLL files
 __pycache__/

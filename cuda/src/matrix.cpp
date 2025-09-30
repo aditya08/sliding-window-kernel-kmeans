@@ -22,6 +22,7 @@ Matrix<T>::Matrix(int rows, int cols, T* data) : nrows(rows), ncols(cols) {
     copy(rows, cols, data);
 }
 
+// copy data from input array to matrix
 template <typename T>
 void Matrix<T>::copy(int rows, int cols, const T* data){
     if (rows != nrows || cols != ncols) {

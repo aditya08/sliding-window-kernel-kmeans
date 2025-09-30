@@ -1,7 +1,9 @@
 #ifndef __DATALOADER_HPP__
 #define __DATALOADER_HPP__
 
+#include <fstream>
 #include <iostream>
+#include <sstream>
 
 #include "matrix.hpp"
 
@@ -23,40 +25,49 @@ class LIBSVMReader {
     void loadData(Matrix<float>& dataset, Matrix<int>& labels) {
         std::string line;
         int row = 0, nnz = 0;
-        const int* labels_dataptr = labels.getDataPtr();
-        const float* data_dataptr = dataset.getDataPtr();
+        // const int* labels_dataptr = labels.getDataPtr();
+        // const float* data_dataptr = dataset.getDataPtr();
         while (std::getline(file, line)) {
             if (line.empty()) continue;
             std::istringstream iss(line);
             std::string token;
             iss >> token;
-            labels_dataptr[row++] = std::stoi(token);
+            labels.setValue(row, 0, std::stoi(token));
+            // labels_dataptr[row++] = std::stoi(token);
+            int col = 0;
             while (iss >> token) {
                 size_t pos = token.find(':');
                 if (pos != std::string::npos) {
+                    col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
                     T value = static_cast<T>(std::stof(token.substr(pos + 1)));
-                    data_dataptr[nnz++] = value;
+                    dataset.setValue(row, col, value);
+                    // data_dataptr[nnz++] = value;
                 }
             }
+            row++;
         }
     }
 
     void loadData(Matrix<double>& dataset, Matrix<int>& labels) {
         std::string line;
         int row = 0, nnz = 0;
-        const int* labels_dataptr = labels.getDataPtr();
+        // const int* labels_dataptr = labels.getDataPtr();
         const double* data_dataptr = dataset.getDataPtr();
         while (std::getline(file, line)) {
             if (line.empty()) continue;
             std::istringstream iss(line);
             std::string token;
             iss >> token;
-            labels_dataptr[row++] = std::stoi(token);
+            labels.setValue(row, 0, std::stoi(token));
+            // labels_dataptr[row++] = std::stoi(token);
+            int col = 0;
             while (iss >> token) {
                 size_t pos = token.find(':');
                 if (pos != std::string::npos) {
+                    col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
                     T value = static_cast<T>(std::stod(token.substr(pos + 1)));
-                    data_dataptr[nnz++] = value;
+                    dataset.setValue(row, col, value);
+                    // data_dataptr[nnz++] = value;
                 }
             }
         }

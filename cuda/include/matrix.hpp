@@ -16,10 +16,10 @@ class Matrix {
     const T* getDataPtr(int offset = 0);
 
     private:
-    int nrows;
-    int ncols;
-    int size;
-    T* data_ptr;
+    int nrows = 0;
+    int ncols = 0;
+    int size = 0;
+    T* data_ptr = nullptr;
 
     void freeMemory();
     void allocateMemory(int len);
@@ -27,4 +27,5 @@ class Matrix {
 
 template class Matrix<float>;
 template class Matrix<double>;
+template class Matrix<int>;
 #endif // MATRIX_CUH
