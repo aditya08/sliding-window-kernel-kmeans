@@ -4,11 +4,21 @@
 #include <random>
 #include <algorithm>
 
+#include "matrix.hpp"
+
 #include "blaswrapper.cuh"
+#include "kernel_function.cuh"
 #include "kernel_kmeans.cuh"
 
 template <typename T>
-__global__ void kmeans_kernel(const T* kernel_block_matrix, const int block_size, const int n_samples, const T* dist_matrix, const int n_clusters, int* block_labels, T* centroids){
+KernelKMeans<T>::KernelKMeans(KernelFunction<T>* kernel, int max_iters, T tol) {
+    kernel_fn = kernel;
+    max_iters = max_iters;
+    tol = tol;
+}
+
+template <typename T>
+__global__ void kmeans_kernel(const T* kernel_block_matrix, const int block_size, const int n_samples, const T* dist_matrix, const int n_clusters, int* block_labels, T* centroids) {
 
 }
 
@@ -78,7 +88,7 @@ __global__ void compute_masked_distance_matrix_kernel(const T* distance_matrix, 
 }
 
 template <typename T>
-__host__ void KernelKMeans<T>::fit(const T* data, const int n_samples, const int n_features, const int n_clusters, const int block_size, int seed) {
+__host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const int n_features, const int n_clusters, const int block_size, int seed) {
     bool converged = false;
     bool labels_converged = false;
     int iter = 0;
@@ -133,7 +143,7 @@ __host__ void KernelKMeans<T>::fit(const T* data, const int n_samples, const int
             // kernel->compute_kernel_matrix(CUBLAS_OP_T, CUBLAS_OP_N, current_block_size, n_samples, n_features, data + block_start, current_block_size, data, n_features, kernel_block_matrix, n_samples);
 
             //!! computes kernel_block_matrix in column-major order (current_block_size x n_samples), with a block of samples (data + block_start) in row-major order and with all samples (data) in row-major order **//
-            kernel->compute_kernel_matrix(CUBLAS_OP_T, CUBLAS_OP_N, current_block_size, n_samples, n_features, data + block_start, n_features, data, n_features, dev_kernel_block_matrix, current_block_size);
+            kernel_fn->compute_kernel_matrix(CUBLAS_OP_T, CUBLAS_OP_N, current_block_size, n_samples, n_features, data.getDataPtr(block_start), n_features, data.getDataPtr(), n_features, dev_kernel_block_matrix, current_block_size);
 
 
             // call dist_matrix_ptr (row_major) = kernel_block_matrix (column-major) @ centroids (row-major)

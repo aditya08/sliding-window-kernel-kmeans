@@ -5,17 +5,15 @@
 template <typename T>
 class KernelKMeans {
   public:
-    __host__ KernelKMeans(KernelType type, int max_iters=300, T tol=1e-4): kernel_type(type), max_iters(max_iters), tol(tol) {}
+    __host__ KernelKMeans(KernelFunction<T>* kernel, int max_iters=300, T tol=1e-4);
     __host__ ~KernelKMeans();
-    __host__ void fit(const T* data, const int n_samples, const int n_features, const int n_clusters, const int block_size, int seed=42);
-    __host__ void predict(const T* data, int* labels, const int n_samples, const int n_features);
+    __host__ void fit(Matrix<T>& data, const int n_samples, const int n_features, const int n_clusters, const int block_size, int seed=42);
+    __host__ void predict(Matrix<T>& data, const int n_samples, const int n_features);
   private:
+    KernelFunction<T>* kernel_fn;
     int max_iters;
     T tol;
     T* centroids; // In kernel space
-    int *labels;
-    KernelType kernel_type;
-    KernelFunction<T>* kernel;
 };
 
 #endif  // KERNEL_KMEANS_CUH
