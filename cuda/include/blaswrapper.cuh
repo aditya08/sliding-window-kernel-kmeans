@@ -4,7 +4,7 @@
 
 #include "cublas_v2.h"
 
-__host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int m, const int n, const int k, const float* alpha, const float* A, const int lda, const float* B, const int ldb, const float* beta, float* C, const int ldc) {
+inline __host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int m, const int n, const int k, const float* alpha, const float* A, const int lda, const float* B, const int ldb, const float* beta, float* C, const int ldc) {
     cublasHandle_t handle;
     cublasStatus_t status;
     cublasCreate(&handle);
@@ -16,7 +16,7 @@ __host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int
     cublasDestroy(handle);
 }
 
-__host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int m, const int n, const int k, const double* alpha, const double* A, const int lda, const double* B, const int ldb, const double* beta, double* C, const int ldc) {
+inline __host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int m, const int n, const int k, const double* alpha, const double* A, const int lda, const double* B, const int ldb, const double* beta, double* C, const int ldc) {
     cublasHandle_t handle;
     cublasStatus_t status;
     cublasCreate(&handle);
@@ -28,7 +28,7 @@ __host__ void gemm(cublasOperation_t transA, cublasOperation_t transB, const int
     cublasDestroy(handle);
 }
 
-__host__ void gemv(cublasOperation_t transA, const int m, const int n, const float* alpha, const float* A, const int lda, const float* x, const int incx, const float* beta, float* y, const int incy) {
+inline __host__ void gemv(cublasOperation_t transA, const int m, const int n, const float* alpha, const float* A, const int lda, const float* x, const int incx, const float* beta, float* y, const int incy) {
     cublasHandle_t handle;
     cublasStatus_t status;
     cublasCreate(&handle);
@@ -40,7 +40,7 @@ __host__ void gemv(cublasOperation_t transA, const int m, const int n, const flo
     cublasDestroy(handle);
 }
 
-__host__ void gemv(cublasOperation_t transA, const int m, const int n, const double* alpha, const double* A, const int lda, const double* x, const int incx, const double* beta, double* y, const int incy) {
+inline __host__ void gemv(cublasOperation_t transA, const int m, const int n, const double* alpha, const double* A, const int lda, const double* x, const int incx, const double* beta, double* y, const int incy) {
     cublasHandle_t handle;
     cublasStatus_t status;
     cublasCreate(&handle);

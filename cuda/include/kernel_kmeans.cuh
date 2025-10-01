@@ -1,7 +1,11 @@
 #ifndef KERNEL_KMEANS_CUH
 #define KERNEL_KMEANS_CUH
 #include <cuda_runtime.h>
+
+#include "matrix.hpp"
+
 #include "kernel_function.cuh"
+
 template <typename T>
 class KernelKMeans {
   public:
@@ -13,7 +17,12 @@ class KernelKMeans {
     KernelFunction<T>* kernel_fn;
     int max_iters;
     T tol;
-    T* centroids; // In kernel space
+    int *labels = nullptr;
+    T *centroids = nullptr;
+    T *distances = nullptr;
 };
+
+template class KernelKMeans<float>;
+template class KernelKMeans<double>;
 
 #endif  // KERNEL_KMEANS_CUH

@@ -4,10 +4,7 @@
 #include <random>
 #include <algorithm>
 
-#include "matrix.hpp"
-
 #include "blaswrapper.cuh"
-#include "kernel_function.cuh"
 #include "kernel_kmeans.cuh"
 
 template <typename T>
@@ -101,7 +98,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     T current_objective = 0.0;
     // Allocate host memory
     int* prev_labels = nullptr; // To check for label convergence
-    int* labels = new int[n_samples];
+    labels = new int[n_samples];
     T* kernel_block_matrix = new T[block_size * n_samples];
     T* dist_matrix = new T[n_samples * n_clusters];
     T* masked_dist_matrix = new T[n_samples * n_clusters];
@@ -205,6 +202,9 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         }
         iter++;
     }
+    centroids = centroids_matrix;
+    labels = labels;
+    distances = dist_matrix;
     // Free device memory
     cudaFree(dev_kernel_block_matrix);
     cudaFree(dev_dist_matrix);
@@ -215,15 +215,19 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     cudaFree(dev_labels);
     // Free host memory
     delete[] kernel_block_matrix;
-    delete[] dist_matrix;
+    // delete[] dist_matrix;
     delete[] masked_dist_matrix;
-    delete[] centroids_matrix;
+    // delete[] centroids_matrix;
     delete[] masked_dist_sum;
     delete[] counts;
     delete[] ones_vector;
     delete[] prev_labels;
-    delete[] labels;
+    // delete[] labels;
 }
 
-template class KernelKMeans<float>;
-template class KernelKMeans<double>;
+template <typename T>
+KernelKMeans<T>::~KernelKMeans() {
+    if (labels) delete[] labels;
+    if (centroids) delete[] centroids;
+    if (distances) delete[] distances;
+}

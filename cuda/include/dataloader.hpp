@@ -1,5 +1,5 @@
-#ifndef __DATALOADER_HPP__
-#define __DATALOADER_HPP__
+#ifndef DATALOADER_HPP
+#define DATALOADER_HPP
 
 #include <fstream>
 #include <iostream>
@@ -41,6 +41,7 @@ class LIBSVMReader {
                     col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
                     T value = static_cast<T>(std::stof(token.substr(pos + 1)));
                     dataset.setValue(row, col, value);
+                    nnz++;
                     // data_dataptr[nnz++] = value;
                 }
             }
@@ -67,6 +68,7 @@ class LIBSVMReader {
                     col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
                     T value = static_cast<T>(std::stod(token.substr(pos + 1)));
                     dataset.setValue(row, col, value);
+                    nnz++;
                     // data_dataptr[nnz++] = value;
                 }
             }
