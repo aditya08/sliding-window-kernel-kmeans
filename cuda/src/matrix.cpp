@@ -6,9 +6,9 @@
 #include "matrix.hpp"
 
 template <typename T>
-Matrix<T>::Matrix(int rows, int cols) : nrows(rows), ncols(cols) {
+Matrix<T>::Matrix(int rows, int cols, bool allocateOnDevice) : nrows(rows), ncols(cols) {
     size = rows * cols;
-    allocateMemory(size);
+    allocateMemory(size, allocateOnDevice);
     if (!data_ptr) {
         std::cerr << "Memory allocation failed in constructor\n";
     }
@@ -16,21 +16,21 @@ Matrix<T>::Matrix(int rows, int cols) : nrows(rows), ncols(cols) {
 
 // copy constructor
 template <typename T>
-Matrix<T>::Matrix(int rows, int cols, T* data) : nrows(rows), ncols(cols) {
+Matrix<T>::Matrix(int rows, int cols, T* data, bool allocateOnDevice) : nrows(rows), ncols(cols) {
     size = rows * cols;
-    allocateMemory(size);
+    allocateMemory(size, allocateOnDevice);
     copy(rows, cols, data);
 }
 
 // copy data from input array to matrix
 template <typename T>
-void Matrix<T>::copy(int rows, int cols, const T* data){
+void Matrix<T>::copy(int rows, int cols, const T* data, bool allocateOnDevice) {
     if (rows != nrows || cols != ncols) {
         freeMemory();
         nrows = rows;
         ncols = cols;
         size = rows * cols;
-        allocateMemory(size);
+        allocateMemory(size, allocateOnDevice);
         if (!data_ptr) {
             std::cerr << "Memory allocation failed during copy\n";
             return;
@@ -41,21 +41,35 @@ void Matrix<T>::copy(int rows, int cols, const T* data){
 
 // allocate pinned host memory
 template <typename T>
-void Matrix<T>::allocateMemory(int len) {
-    if (data_ptr) {
-        freeMemory();
+void Matrix<T>::allocateMemory(int len, bool allocateOnDevice) {
+    if (data_ptr || len <= 0) {
+        return; // already allocated
     }
     size = len;
-    cudaError_t err = cudaMallocHost((void**)&data_ptr, size * sizeof(T));
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to allocate pinned host memory\n";
-        data_ptr = nullptr;
-        size = 0;
-        nrows = 0;
-        ncols = 0;
-        return;
+    if (allocateOnDevice) {
+        isOnDevice = true;
+        cudaError_t err = cudaMalloc((void**)&data_ptr, size * sizeof(T));
+        if (err != cudaSuccess) {
+            std::cerr << "Failed to allocate device memory\n";
+            data_ptr = nullptr;
+            size = 0;
+            nrows = 0;
+            ncols = 0;
+            return;
+        }
     }
-    std::fill(data_ptr, data_ptr + size, 0.0);
+    else{
+        cudaError_t err = cudaMallocHost((void**)&data_ptr, size * sizeof(T));
+        if (err != cudaSuccess) {
+            std::cerr << "Failed to allocate pinned host memory\n";
+            data_ptr = nullptr;
+            size = 0;
+            nrows = 0;
+            ncols = 0;
+            return;
+        }
+        std::fill(data_ptr, data_ptr + size, 0.0);
+    }
 }
 
 template <typename T>

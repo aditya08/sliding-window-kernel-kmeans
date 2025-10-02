@@ -31,31 +31,40 @@ class KmeansStreaming(Kmeans):
         X = self.dataset.data
         n_samples = self.dataset.shape[0]
         dist = torch.zeros(n_samples, self.n_clusters, device=self.device)
+        # self.labels = torch.tensor([1, 2, 2, 0, 2, 2, 1, 1, 0, 1], device=self.device)  # for debugging
         self.labels = torch.randint(0, self.n_clusters, (n_samples,), device=self.device)
         new_labels = self.labels.clone()
         V = F.one_hot(self.labels, num_classes=self.n_clusters).to(dtype=torch.float32, device=self.device)
         V_sum = V.sum(0).unsqueeze(0)
         K_diag = self.kernel(X, X, diag=True).unsqueeze(1)
         tr_K = K_diag.sum()
-        prev_objective = 0.0
-        for _ in range(self.max_iter):
-            objective = tr_K.item()
+        prev_objective = float('inf')
+        for iter in range(self.max_iter):
+            # objective = tr_K.item()
             counts = torch.clamp(V_sum, min=1)
             sampled_KV_sum = 0
             sampled_KV_sum0_accum = torch.zeros(1, self.n_clusters, device=self.device)
             for start in range(0, n_samples, self.block_size):
                 end = min(start + self.block_size, n_samples)
-                KV = (self.kernel(X[start:end], X) @ V) / counts
+                K = self.kernel(X[start:end], X)
+                KV = (K @ V) / counts
+                # print(KV)
                 sampled_KV = (KV * V[start:end])
-                dist[start:end] = K_diag[start:end] - (2 * KV)
+                # print(sampled_KV)
+                # dist[start:end] = K_diag[start:end] - (2 * KV)
+                dist[start:end] = - (2 * KV)
                 sampled_KV_sum0_accum += sampled_KV.sum(0) / counts
+                # print("Sampled_KV_sum0_accum:", sampled_KV_sum0_accum)
                 sampled_KV_sum += sampled_KV.sum().item()
-            objective -= sampled_KV_sum
+                # print("Sampled_KV_sum:", sampled_K/V_sum)
+            objective = sampled_KV_sum
             dist += sampled_KV_sum0_accum
+            # print(sampled_KV_sum0_accum)
+            # print(dist)
             new_labels = dist.argmin(1)
             print(f"Iteration objective value: {objective:.4f}, objective change: {abs(prev_objective - objective):.4f}")
             if torch.equal(self.labels, new_labels) or abs(prev_objective - objective) < self.tol:
-                print("Cluster assignments are stable. Stopping iterations.")
+                print("Convergence reached at iteration", iter)
                 self.labels = new_labels
                 break
             self.labels = new_labels.clone()
@@ -72,16 +81,17 @@ class KmeansStreaming(Kmeans):
 
 # Example usage:
 if __name__ == "__main__":
-    from kernel_functions import RBF
+    from kernel_functions import RBF, Linear, Polynomial
     torch.random.manual_seed(42)
     start_time = time.time()
     dataset = Dataset("./data/acoustic", device='cpu')
     end_time = time.time()
     print(dataset.shape)
     print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
-    kernel = RBF(gamma=0.5)
-    n_clusters = 10
-    block_size = 1024
+    # kernel = RBF(gamma=0.5)
+    kernel = Linear()
+    n_clusters = 3
+    block_size = 2048
     print(f"Running Kernel K-means (streaming) with block size {block_size}")
     model = KmeansStreaming(n_clusters=n_clusters, dataset=dataset, kernel=kernel, block_size=block_size, max_iter=10, device='cpu')
     start_time = time.time()

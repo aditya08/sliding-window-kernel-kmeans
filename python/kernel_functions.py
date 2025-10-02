@@ -61,7 +61,7 @@ class Linear(KernelFunction):
         """
         if diag:
             return (X * Y).sum(dim=1)
-        return X.dot(Y.t())
+        return X @ (Y.t())
 
 class Tanh(KernelFunction):
     def __init__(self, alpha=1.0, beta=0.0):
