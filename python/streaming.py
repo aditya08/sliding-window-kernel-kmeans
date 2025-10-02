@@ -88,8 +88,9 @@ if __name__ == "__main__":
     end_time = time.time()
     print(dataset.shape)
     print(f"Dataset loaded in {end_time - start_time:.4f} seconds")
+    # kernel = Linear()
+    kernel = Polynomial(degree=2, coef0=1)
     # kernel = RBF(gamma=0.5)
-    kernel = Linear()
     n_clusters = 3
     block_size = 2048
     print(f"Running Kernel K-means (streaming) with block size {block_size}")

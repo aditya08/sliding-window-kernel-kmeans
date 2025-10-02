@@ -45,8 +45,12 @@ __host__ void random_label_initialization(int* labels, const int n_samples, cons
 template <typename T>
 __host__ void centroids_matrix_initialization(T* centroids_matrix, const int n_samples, const int n_clusters, int* labels) {
     // Initialize centroids matrix to zero
-    std::fill(centroids_matrix, centroids_matrix + n_samples * n_clusters, 0.0);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n_samples * n_clusters; i++) {
+        centroids_matrix[i] = 0.0;
+    }
     //!! Fill centroids matrix, assumed to be row-major
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_samples; i++) {
         centroids_matrix[i * n_clusters + labels[i]] = 1.0;
         // TODO: consider folding 1/counts into centroids matrix
@@ -56,10 +60,15 @@ __host__ void centroids_matrix_initialization(T* centroids_matrix, const int n_s
 
 template <typename T>
 __host__ void counts_initialization(int* labels, const int n_samples, T* counts, const int n_clusters) {
-    std::fill(counts, counts + n_clusters, 0);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < n_clusters; i++) {
+        counts[i] = 0;
+    }
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_samples; i++) {
         counts[labels[i]]++;
     }
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_clusters; i++) {
         if (counts[i] == 0) counts[i] = 1;
     }
@@ -67,7 +76,7 @@ __host__ void counts_initialization(int* labels, const int n_samples, T* counts,
 
 template <typename T>
 __host__ void distance_matrix_divide_counts(T* dist_matrix, T* counts, const int n_samples, const int n_clusters) {
-    // #pragma omp parallel for schedule(static) collapse(2)
+    #pragma omp parallel for schedule(static) collapse(2)
     for (int i = 0; i < n_samples; i++) {
         for (int j = 0; j < n_clusters; j++) {
             dist_matrix[i * n_clusters + j] /= counts[j];
@@ -101,9 +110,9 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     T objective_diff = std::numeric_limits<T>::max();
     T previous_objective = std::numeric_limits<T>::max();
     T current_objective = 0.0;
-    // Allocate host memory
+    // Allocate pinned host memory
     int* prev_labels; // To check for label convergence
-    T *kernel_block_matrix, *masked_dist_matrix;
+    T *kernel_block_matrix;
     T *masked_dist_sum, *counts, *ones_vector;
     T *masked_dist_sum_accum;
     cudaError_t err;
@@ -112,12 +121,14 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     err = cudaMallocHost((void**)&centroids_matrix, n_samples * n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&dist_matrix, n_samples * n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&kernel_block_matrix, block_size * n_samples * sizeof(T));
-    err = cudaMallocHost((void**)&masked_dist_matrix, block_size * n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&masked_dist_sum, n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&masked_dist_sum_accum, n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&counts, n_clusters * sizeof(T));
     err = cudaMallocHost((void**)&ones_vector, block_size * sizeof(T));
-
+    if (err != cudaSuccess) {
+        std::cerr << "Error allocating pinned host memory: " << cudaGetErrorString(err) << std::endl;
+        exit(EXIT_FAILURE);
+    }
     std::fill(dist_matrix, dist_matrix + n_samples * n_clusters, 0.0);
     std::fill(ones_vector, ones_vector + block_size, 1.0);
     // labels = new int[n_samples];
@@ -133,15 +144,20 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     T* dev_kernel_block_matrix, *dev_dist_matrix, *dev_centroids_matrix;
     T* dev_masked_dist_matrix, *dev_masked_dist_sum;
     T* dev_counts, *dev_data_matrix;
-    cudaMalloc(&dev_labels, n_samples * sizeof(int));
-    cudaMalloc(&dev_kernel_block_matrix, block_size * n_samples * sizeof(T));
-    cudaMalloc(&dev_dist_matrix, block_size * n_clusters * sizeof(T));
-    cudaMalloc(&dev_masked_dist_matrix, block_size * n_clusters * sizeof(T));
-    cudaMalloc(&dev_centroids_matrix, n_samples * n_clusters * sizeof(T));
-    cudaMalloc(&dev_masked_dist_sum, n_clusters * sizeof(T));
-    cudaMalloc(&dev_counts, n_clusters * sizeof(T));
-    cudaMalloc(&dev_data_matrix, n_samples * n_features * sizeof(T));
 
+    err = cudaMalloc(&dev_labels, n_samples * sizeof(int));
+    err = cudaMalloc(&dev_kernel_block_matrix, block_size * n_samples * sizeof(T));
+    err = cudaMalloc(&dev_dist_matrix, block_size * n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_masked_dist_matrix, block_size * n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_centroids_matrix, n_samples * n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_masked_dist_sum, n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_counts, n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_data_matrix, n_samples * n_features * sizeof(T));
+
+    if (err != cudaSuccess) {
+        std::cerr << "Error allocating device memory: " << cudaGetErrorString(err) << std::endl;
+        exit(EXIT_FAILURE);
+    }
     cudaMemcpy(dev_data_matrix, data.getDataPtr(), n_samples * n_features * sizeof(T), cudaMemcpyHostToDevice);
     // Main loop
     // Initialize labels randomly
@@ -193,7 +209,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
             int nblocks = (current_block_size * n_clusters + 255) / 256;
             compute_masked_distance_matrix_kernel<<<nblocks, 256>>>(dev_dist_matrix, current_block_size, n_clusters, dev_centroids_matrix + block_start * n_clusters, dev_counts, dev_masked_dist_matrix);
 
-            cudaMemcpy(masked_dist_matrix, dev_masked_dist_matrix, current_block_size * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
+            // cudaMemcpy(masked_dist_matrix, dev_masked_dist_matrix, current_block_size * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
             // std::cout << "Masked dist matrix: \n";
             // for (int i = 0; i < current_block_size * n_clusters; ++i) {
             //      std::cout << masked_dist_matrix[i] << " ";
@@ -217,7 +233,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
             // cudaMemcpy(labels, dev_labels, n_samples * sizeof(int), cudaMemcpyDeviceToHost);
             // int grid_size = (current_block_size + 255) / 256;
             // kmeans_kernel<<<grid_size, 256>>>(data + block_start * n_features, current_block_size, n_features, n_clusters, labels + block_start, centroids, max_iters, tol);
-            cudaDeviceSynchronize();
+            // cudaDeviceSynchronize();
         }
         previous_objective = (iter == 0) ? std::numeric_limits<T>::max() : current_objective;
         current_objective = sampled_KV_sum;
@@ -242,8 +258,9 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
             min_index = std::distance(dist_matrix + i * n_clusters, min_elem);
             labels[i] = min_index;
         }
-        check_labels(labels, prev_labels, n_samples, labels_converged);
-        converged = (iter == max_iters || objective_diff < tolerance || labels_converged);
+        // check_labels(labels, prev_labels, n_samples, labels_converged);
+        converged = iter == max_iters - 1;
+        // converged = (iter == max_iters || objective_diff < tolerance || labels_converged);
         if (converged){
             std::cout << "Converged at iteration " << iter << "/" << max_iters << " with objective: " << current_objective << " objective diff: " << objective_diff << " labels_converged: " << labels_converged << "\n";
             break;
@@ -267,7 +284,6 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     cudaFreeHost(centroids_matrix);
     cudaFreeHost(dist_matrix);
     cudaFreeHost(kernel_block_matrix);
-    cudaFreeHost(masked_dist_matrix);
     cudaFreeHost(masked_dist_sum);
     cudaFreeHost(masked_dist_sum_accum);
     cudaFreeHost(counts);

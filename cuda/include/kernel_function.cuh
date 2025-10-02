@@ -19,7 +19,7 @@ template <typename T>
 class KernelFunction {
   public:
   __host__ KernelFunction(): kernel_type(KernelType::UNDEFINED) {};
-  __host__ virtual ~KernelFunction() = default;
+  virtual ~KernelFunction() = default;
   __host__ virtual void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc,  bool diagonal = false) = 0;
   __host__ std::string get_kernel_name() { return kernel_name; };
   protected:
@@ -35,7 +35,7 @@ class LinearKernel : public KernelFunction<T> {
         this->kernel_type = KernelType::LINEAR;
         this->kernel_name = "Linear Kernel";
     }
-    __host__ ~LinearKernel() {}
+    ~LinearKernel() {}
     __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
 };
 
@@ -46,7 +46,7 @@ class RBFKernel : public KernelFunction<T> {
         this->kernel_type = KernelType::RBF;
         this->kernel_name = "RBF Kernel";
     }
-    __host__ ~RBFKernel() {}
+    ~RBFKernel() {}
     __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T gamma;
@@ -59,7 +59,7 @@ class TanhKernel : public KernelFunction<T> {
         this->kernel_type = KernelType::TANH;
         this->kernel_name = "Tanh Kernel";
     }
-    __host__ ~TanhKernel() {}
+    ~TanhKernel() {}
     __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T alpha;
@@ -73,7 +73,7 @@ class PolynomialKernel : public KernelFunction<T> {
         this->kernel_type = KernelType::POLYNOMIAL;
         this->kernel_name = "Polynomial Kernel";
     }
-    __host__ ~PolynomialKernel() {}
+    ~PolynomialKernel() {}
     __host__ void compute_kernel_matrix(cublasOperation_t OpA, cublasOperation_t OpB, const int m, const int n, const int k, const T* A, const int lda, const T* B, const int ldb, T* C, const int ldc, bool diagonal = false) override;
   private:
     T alpha;

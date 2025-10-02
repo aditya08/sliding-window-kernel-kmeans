@@ -22,7 +22,7 @@ class LIBSVMReader {
         }
         readMetadata();
     }
-    void loadData(Matrix<float>& dataset, Matrix<int>& labels) {
+    void loadData(Matrix<float>& dataset, Matrix<int>& labels, int max_rows = -1) {
         std::string line;
         int row = 0, nnz = 0;
         // const int* labels_dataptr = labels.getDataPtr();
@@ -46,10 +46,11 @@ class LIBSVMReader {
                 }
             }
             row++;
+            if (max_rows > 0 && row >= max_rows) break;
         }
     }
 
-    void loadData(Matrix<double>& dataset, Matrix<int>& labels) {
+    void loadData(Matrix<double>& dataset, Matrix<int>& labels, int max_rows = -1) {
         std::string line;
         int row = 0, nnz = 0;
         // const int* labels_dataptr = labels.getDataPtr();
@@ -72,6 +73,8 @@ class LIBSVMReader {
                     // data_dataptr[nnz++] = value;
                 }
             }
+            row++;
+            if (max_rows > 0 && row >= max_rows) break;
         }
     }
 

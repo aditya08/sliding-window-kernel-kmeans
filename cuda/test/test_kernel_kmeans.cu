@@ -1,3 +1,4 @@
+#include <chrono>
 #include <string>
 
 #include "argparser.hpp"
@@ -15,9 +16,10 @@ int main(int argc, char** argv) {
     args.add_argument<int>("n_clusters", "Number of clusters", 0);
     args.add_argument<int>("block_size", "Block size for processing data", 0);
     args.add_argument<std::string>("kernel", "Kernel type (linear, rbf, polynomial)", "linear");
-    args.add_argument<int>("max_iters", "Maximum number of iterations", 300);
+    args.add_argument<int>("max_iters", "Maximum number of iterations", 100);
     args.add_argument<float>("tol", "Tolerance for convergence", 1e-4);
     args.add_argument<int>("seed", "Random seed for initialization", 42);
+    args.add_argument<int>("max_rows", "Maximum number of rows to load from the dataset", -1);
 
     try {
         args.parse(argc, argv);
@@ -36,6 +38,7 @@ int main(int argc, char** argv) {
     int max_iters = args.get<int>("max_iters");
     float tol = args.get<float>("tol");
     int seed = args.get<int>("seed");
+    int max_rows = args.get<int>("max_rows");
 
     if (n_clusters <= 0 || block_size <= 0) {
         std::cerr << "Error: --n_clusters and --block_size must be positive integers." << std::endl;
@@ -51,15 +54,21 @@ int main(int argc, char** argv) {
     LIBSVMReader<float> loader(data_path);
     Matrix<float> data(loader.getNumRows(), loader.getNumCols());
     Matrix<int> labels(loader.getNumRows(), 1);
-    loader.loadData(data, labels);
+    loader.loadData(data, labels, max_rows);
     std::cout << "Loaded data with " << loader.getNumRows() << " samples and " << loader.getNumCols() << " features." << std::endl;
     // Initialize KernelFunction
     LinearKernel<float> kernel = LinearKernel<float>();
+    // PolynomialKernel<float> kernel = PolynomialKernel<float>(2, 1.0f, 0.0f);
     std::cout << "Using kernel: " << kernel.get_kernel_name() << "\n";
     // Initialize and fit KernelKMeans
     KernelKMeans<float> kmeans(&kernel, max_iters=max_iters, tol=tol);
     std::cout << "Fitting KernelKMeans with " << n_clusters << " clusters, block size " << block_size << ", max iters " << max_iters << ", tol " << tol << ", seed " << seed << "\n";
+    auto start = std::chrono::high_resolution_clock::now();
     kmeans.fit(data, loader.getNumRows(), loader.getNumCols(), n_clusters, block_size, seed);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
     std::cout << "Clustering complete.\n";
+    std::cout << "Fitting completed in " << elapsed.count() << " seconds.\n";
+    // Predict cluster labels
     return EXIT_SUCCESS;
 }

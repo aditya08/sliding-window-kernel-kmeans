@@ -1,3 +1,7 @@
+# SLURM script files
+*.sl
+# CSV output files
+*.csv
 lib/
 build/
 python/data/
