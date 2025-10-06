@@ -397,8 +397,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         // add masked_dist_sum[j] to each column j of dist_matrix
         // #pragma omp parallel for schedule(static)
         // std::cout << "Distance matrix update: \n";
-        update_distances_and_labels<<<(n_samples * n_clusters + 255)/256, 256>>>(dev_dist_matrix, n_samples, n_clusters, dev_counts,
-            dev_masked_dist_sum, dev_labels);
+        // update_distances_and_labels<<<(n_samples * n_clusters + 255)/256, 256>>>(dev_dist_matrix, n_samples, n_clusters, dev_counts, dev_masked_dist_sum, dev_labels);
 
         #pragma omp parallel for schedule(static)
         for (int i = 0; i < n_samples; i++) {

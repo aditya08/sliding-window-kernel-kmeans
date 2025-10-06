@@ -132,7 +132,10 @@ template <typename T>
 __global__ void compute_pow_transform(const int size, T* matrix, const T beta, const int degree) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size){
-        matrix[idx] = powf(matrix[idx] + beta, degree);
+        for (int d = 1; d < degree; ++d){
+            matrix[idx] = (matrix[idx] + beta);
+        }
+        // matrix[idx] = powf(matrix[idx] + beta, degree);
     }
 }
 // Specialization for Polynomial Kernel

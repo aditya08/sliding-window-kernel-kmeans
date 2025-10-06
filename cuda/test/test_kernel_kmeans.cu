@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
     std::cout << "Fitting KernelKMeans with " << n_clusters << " clusters, block size " << block_size << ", max iters " << max_iters << ", tol " << tol << ", seed " << seed << "\n";
     auto start = std::chrono::high_resolution_clock::now();
     kmeans.fit(data, loader.getNumRows(), loader.getNumCols(), n_clusters, block_size, seed);
+    cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Clustering complete.\n";
