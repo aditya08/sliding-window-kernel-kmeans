@@ -20,7 +20,6 @@ int main(int argc, char** argv) {
     args.add_argument<float>("tol", "Tolerance for convergence", 1e-4);
     args.add_argument<int>("seed", "Random seed for initialization", 42);
     args.add_argument<int>("max_rows", "Maximum number of rows to load from the dataset", -1);
-
     try {
         args.parse(argc, argv);
     } catch (const std::invalid_argument& e) {
@@ -51,17 +50,28 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
     // Load data from LIBSVM file
-    LIBSVMReader<float> loader(data_path);
+    std::cout << "Loading data from " << data_path << "...\n";
+    LIBSVMReader<float> loader(data_path, max_rows);
     Matrix<float> data(loader.getNumRows(), loader.getNumCols());
     Matrix<int> labels(loader.getNumRows(), 1);
     loader.loadData(data, labels, max_rows);
     std::cout << "Loaded data with " << loader.getNumRows() << " samples and " << loader.getNumCols() << " features." << std::endl;
     // Initialize KernelFunction
-    LinearKernel<float> kernel = LinearKernel<float>();
-    // PolynomialKernel<float> kernel = PolynomialKernel<float>(2, 1.0f, 0.0f);
-    std::cout << "Using kernel: " << kernel.get_kernel_name() << "\n";
+    KernelFunction<float>* kernel;
+    if (kernel_type == "rbf") {
+        std::cerr << "RBF kernel not yet implemented. Exiting." << std::endl;
+        return EXIT_FAILURE;
+        // kernel = new RBFKernel<float>(1.0f);
+    }
+    else if (kernel_type == "polynomial") {
+        kernel = new PolynomialKernel<float>(2, 1.0f, 0.0f);
+    }
+    else { // default to linear
+        kernel = new LinearKernel<float>();
+    }
+    std::cout << "Using kernel: " << kernel->get_kernel_name() << "\n";
     // Initialize and fit KernelKMeans
-    KernelKMeans<float> kmeans(&kernel, max_iters=max_iters, tol=tol);
+    KernelKMeans<float> kmeans(kernel, max_iters=max_iters, tol=tol);
     std::cout << "Fitting KernelKMeans with " << n_clusters << " clusters, block size " << block_size << ", max iters " << max_iters << ", tol " << tol << ", seed " << seed << "\n";
     auto start = std::chrono::high_resolution_clock::now();
     kmeans.fit(data, loader.getNumRows(), loader.getNumCols(), n_clusters, block_size, seed);

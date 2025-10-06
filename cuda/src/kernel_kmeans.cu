@@ -4,6 +4,9 @@
 #include <random>
 #include <algorithm>
 
+#include "curand_kernel.h"
+#include <cub/cub.cuh>
+
 #include "blaswrapper.cuh"
 #include "kernel_kmeans.cuh"
 
@@ -33,12 +36,41 @@ __host__ void check_labels(const int* labels, const int* prev_labels, const int 
     }
 }
 
+__global__ void random_label_initialization_kernel(int* labels, const int n_samples, const int n_clusters, int seed) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    curandState state;
+    curand_init(seed, idx, 0, &state);
+    if (idx < n_samples) {
+        labels[idx] = curand(&state) % n_clusters;
+    }
+    if (idx == 0) {
+        printf("Random label initialization done.\n");
+        printf("First 10 labels: ");
+        for (int i = 0; i < 10 && i < n_samples; i++) {
+            printf("%d ", labels[i]);
+        }
+        printf("\n");
+    }
+}
+
 __host__ void random_label_initialization(int* labels, const int n_samples, const int n_clusters, int seed=42) {
     std::mt19937 gen(seed);
     std::uniform_int_distribution<int> dis(0, n_clusters - 1);
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n_samples; i++) {
         labels[i] = dis(gen);
+    }
+}
+
+template <typename T>
+__global__ void centroids_matrix_initialization_kernel(T* centroids_matrix, const int n_samples, const int n_clusters, int* labels) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n_samples * n_clusters) {
+        centroids_matrix[idx] = 0.0;
+    }
+    __syncthreads();
+    if (idx < n_samples) {
+        centroids_matrix[idx * n_clusters + labels[idx]] = 1.0;
     }
 }
 
@@ -55,6 +87,22 @@ __host__ void centroids_matrix_initialization(T* centroids_matrix, const int n_s
         centroids_matrix[i * n_clusters + labels[i]] = 1.0;
         // TODO: consider folding 1/counts into centroids matrix
         // centroids_matrix[i * n_clusters + labels[i]] += 1.0 / counts[labels[i]];
+    }
+}
+
+template <typename T>
+__global__ void counts_initialization_kernel(int* labels, const int n_samples, T* counts, const int n_clusters) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n_clusters) {
+        counts[idx] = 0;
+    }
+    __syncthreads();
+    if (idx < n_samples) {
+        atomicAdd(&counts[labels[idx]], 1);
+    }
+    __syncthreads();
+    if (idx < n_clusters) {
+        if (counts[idx] == 0) counts[idx] = 1;
     }
 }
 
@@ -95,6 +143,88 @@ __global__ void compute_masked_distance_matrix_kernel(const T* distance_matrix, 
         T count = counts[(idx / n_samples) % n_clusters];
         masked_distance_matrix[row_major_idx] = ( distance_matrix[row_major_idx]/count) * centroids[row_major_idx];
         // printf("masked_distance_matrix[%d] = %f\n", row_major_idx, masked_distance_matrix[row_major_idx]);
+    }
+}
+
+template <typename T>
+__global__ void compute_objective_function_kernel(const T* masked_distance_matrix, const int n_samples, const int n_clusters, T* counts, T* masked_dist_sum, T* masked_dist_sum_accum, T& current_objective) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n_clusters) {
+        masked_dist_sum[idx] = 0.0;
+    }
+    __syncthreads();
+    if (idx < n_samples * n_clusters) {
+        atomicAdd(&masked_dist_sum[idx % n_clusters], masked_distance_matrix[idx]);
+    }
+    __syncthreads();
+    if (idx < n_clusters) {
+        masked_dist_sum_accum[idx] = masked_dist_sum[idx]/counts[idx];
+    }
+    __syncthreads();
+    // Now compute the total objective function value
+    // n_clusters < 256, so we can do a simple reduction in a single block
+    __shared__ T shared_sum[256];
+
+    // Each thread processes a subset of clusters
+    T thread_sum = 0.0;
+    for (int j = threadIdx.x; j < n_clusters; j += blockDim.x) {
+        thread_sum += masked_dist_sum_accum[j];
+    }
+    shared_sum[threadIdx.x] = thread_sum;
+    __syncthreads();
+    // Reduce within block
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (threadIdx.x < stride) {
+            shared_sum[threadIdx.x] += shared_sum[threadIdx.x + stride];
+        }
+        __syncthreads();
+    }
+
+    // Write the result to current_objective
+    if (threadIdx.x == 0) {
+        atomicAdd(&current_objective, shared_sum[0]);
+    }
+    if (idx == 0) {
+        printf("Current objective: %f\n", current_objective);
+    }
+}
+
+template <typename T>
+__global__ void update_distances_and_labels(T* dist_matrix, const int n_samples, const int n_clusters, T* counts, T* masked_dist_sum, int* labels) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n_samples * n_clusters) {
+        dist_matrix[idx] = (-2. * dist_matrix[idx]/counts[idx % n_clusters] + masked_dist_sum[idx % n_clusters]);
+    }
+    __syncthreads();
+    if (idx < n_samples) {
+        // Allocate shared memory for CUB
+        extern __shared__ char shared_memory[];
+
+        T thread_min = FLT_MAX;
+        int thread_min_idx = -1;
+
+        // Each thread processes a subset of clusters
+        for (int j = threadIdx.x; j < n_clusters; j += blockDim.x) {
+            T value = dist_matrix[idx * n_clusters + j];
+            if (value < thread_min) {
+                thread_min = value;
+                thread_min_idx = j;
+            }
+        }
+
+        // Use CUB to perform block-wide reduction
+        typedef cub::BlockReduce<cub::KeyValuePair<int, T>, 256> BlockReduceKV;
+
+        __shared__ typename BlockReduceKV::TempStorage temp_storage_kv;
+
+        cub::KeyValuePair<int, T> thread_kv(thread_min_idx, thread_min);
+        cub::KeyValuePair<int, T> block_kv = BlockReduceKV(temp_storage_kv).Reduce(thread_kv, cub::ArgMin());
+
+        // Write the result to labels
+        if (threadIdx.x == 0) {
+            labels[idx] = block_kv.key; // Use the key from the CUB reduction result
+            // printf("Updated label for sample %d: %d\n", idx, labels[idx]);
+        }
     }
 }
 
@@ -142,7 +272,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     // Allocate device memory
     int* dev_labels;
     T* dev_kernel_block_matrix, *dev_dist_matrix, *dev_centroids_matrix;
-    T* dev_masked_dist_matrix, *dev_masked_dist_sum;
+    T* dev_masked_dist_matrix, *dev_masked_dist_sum, *dev_masked_dist_sum_accum;
     T* dev_counts, *dev_data_matrix;
 
     err = cudaMalloc(&dev_labels, n_samples * sizeof(int));
@@ -151,18 +281,21 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     err = cudaMalloc(&dev_masked_dist_matrix, block_size * n_clusters * sizeof(T));
     err = cudaMalloc(&dev_centroids_matrix, n_samples * n_clusters * sizeof(T));
     err = cudaMalloc(&dev_masked_dist_sum, n_clusters * sizeof(T));
+    err = cudaMalloc(&dev_masked_dist_sum_accum, n_clusters * sizeof(T));
     err = cudaMalloc(&dev_counts, n_clusters * sizeof(T));
     err = cudaMalloc(&dev_data_matrix, n_samples * n_features * sizeof(T));
-
     if (err != cudaSuccess) {
         std::cerr << "Error allocating device memory: " << cudaGetErrorString(err) << std::endl;
         exit(EXIT_FAILURE);
     }
     cudaMemcpy(dev_data_matrix, data.getDataPtr(), n_samples * n_features * sizeof(T), cudaMemcpyHostToDevice);
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
     // Main loop
     // Initialize labels randomly
     // TODO: consider kmeans++ initialization
     // TODO: make this a kernel call?
+    // random_label_initialization_kernel<<<(n_samples + 255)/256, 256>>>(dev_labels, n_samples, n_clusters, seed);
     random_label_initialization(labels, n_samples, n_clusters, seed);
     // TODO: make this a kernel call?
     // std::cout << "Initial labels: " << "\n";
@@ -172,6 +305,10 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     // std::cout << "\n";
     while (iter < max_iters) {
         std::cout << "Starting Iteration " << iter << "...\n";
+        // std::copy(labels, labels + n_samples, prev_labels);
+        // centroids_matrix_initialization_kernel<<<(n_samples * n_clusters + 255)/256, 256>>>(dev_centroids_matrix, n_samples, n_clusters, dev_labels);
+        // counts_initialization_kernel<<<(n_samples + 255)/256, 256>>>(dev_labels, n_samples, dev_counts, n_clusters);
+
         std::copy(labels, labels + n_samples, prev_labels);
         centroids_matrix_initialization(centroids_matrix, n_samples, n_clusters, labels);
         counts_initialization(labels, n_samples, counts, n_clusters);
@@ -179,6 +316,10 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         cudaMemcpy(dev_centroids_matrix, centroids_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyHostToDevice);
         sampled_KV_sum = 0.0;
         std::fill(masked_dist_sum_accum, masked_dist_sum_accum + n_clusters, 0.0);
+        // cudaMemcpy(dev_counts, counts, n_clusters * sizeof(T), cudaMemcpyHostToDevice);
+        // cudaMemcpy(dev_centroids_matrix, centroids_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyHostToDevice);
+        // sampled_KV_sum = 0.0;
+        // std::fill(masked_dist_sum_accum, masked_dist_sum_accum + n_clusters, 0.0);
         // std::cout << "counts: \n";
         // for (int j = 0; j < n_clusters; j++) {
         //     std::cout << counts[j] << " ";
@@ -204,7 +345,8 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
             // std::cout << "Computing distance matrix for block starting at " << block_start << "...\n";
             // dist_matrix (row major) = kernel_block_matrix (column-major) @ centroids (row-major)
             gemm(CUBLAS_OP_N, CUBLAS_OP_T, n_clusters, current_block_size, n_samples, &ONE, dev_centroids_matrix, n_clusters, dev_kernel_block_matrix, current_block_size, &ZERO, dev_dist_matrix, n_clusters);
-            cudaMemcpy(dist_matrix + block_start * n_clusters, dev_dist_matrix, current_block_size * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
+
+            cudaMemcpyAsync(dist_matrix + block_start * n_clusters, dev_dist_matrix, current_block_size * n_clusters * sizeof(T), cudaMemcpyDeviceToHost, stream);
 
             int nblocks = (current_block_size * n_clusters + 255) / 256;
             compute_masked_distance_matrix_kernel<<<nblocks, 256>>>(dev_dist_matrix, current_block_size, n_clusters, dev_centroids_matrix + block_start * n_clusters, dev_counts, dev_masked_dist_matrix);
@@ -235,14 +377,30 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
             // kmeans_kernel<<<grid_size, 256>>>(data + block_start * n_features, current_block_size, n_features, n_clusters, labels + block_start, centroids, max_iters, tol);
             // cudaDeviceSynchronize();
         }
+        // cudaMemcpy(masked_dist_sum, dev_masked_dist_sum, n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
         previous_objective = (iter == 0) ? std::numeric_limits<T>::max() : current_objective;
+        current_objective = 0.0;
         current_objective = sampled_KV_sum;
+        // compute_objective_function_kernel<<<(n_samples + 255)/256, 256>>>(dev_masked_dist_matrix, n_samples, n_clusters, dev_counts, dev_masked_dist_sum, dev_masked_dist_sum_accum, current_objective);
+        // for (int j = 0; j < n_clusters; j++) {
+        //     sampled_KV_sum += masked_dist_sum[j]; // add to total sampled_KV_sum
+        //     masked_dist_sum_accum[j] += masked_dist_sum[j]/counts[j];
+        //     masked_dist_sum[j] = 0.0; // reset for next iteration
+        //     // std::cout << "masked_dist_sum[" << j << "] before adding to sampled_KV_sum: " << masked_dist_sum[j]  << " masked_dist_sum_accum[" << j << "]: " << masked_dist_sum_accum[j] << "\n";
+        // }
+        // cudaMemcpy(dev_masked_dist_sum, masked_dist_sum, n_clusters * sizeof(T), cudaMemcpyHostToDevice);
+        // current_objective = sampled_KV_sum;
         objective_diff = std::abs(previous_objective - current_objective);
         std::cout << "Objective at iteration " << iter << ": " << current_objective << ", Objective diff: " << objective_diff << "\n";
+        // cudaStreamSynchronize(stream);
         // TODO: compute new labels
         // add masked_dist_sum[j] to each column j of dist_matrix
         // #pragma omp parallel for schedule(static)
         // std::cout << "Distance matrix update: \n";
+        update_distances_and_labels<<<(n_samples * n_clusters + 255)/256, 256>>>(dev_dist_matrix, n_samples, n_clusters, dev_counts,
+            dev_masked_dist_sum, dev_labels);
+
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n_samples; i++) {
             for (int j = 0; j < n_clusters; j++) {
                 dist_matrix[i * n_clusters + j] = (-2. * dist_matrix[i * n_clusters + j]/counts[j] + masked_dist_sum_accum[j]);
@@ -262,7 +420,10 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         converged = iter == max_iters - 1;
         // converged = (iter == max_iters || objective_diff < tolerance || labels_converged);
         if (converged){
-            std::cout << "Converged at iteration " << iter << "/" << max_iters << " with objective: " << current_objective << " objective diff: " << objective_diff << " labels_converged: " << labels_converged << "\n";
+            std::cout << "Converged at iteration " << iter + 1 << "/" << max_iters << " with objective: " << current_objective << " objective diff: " << objective_diff << " labels_converged: " << labels_converged << "\n";
+            // cudaMemcpy(labels, dev_labels, n_samples * sizeof(int), cudaMemcpyDeviceToHost);
+            // cudaMemcpy(dist_matrix, dev_dist_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
+            // cudaMemcpy(centroids_matrix, dev_centroids_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
             break;
         }
         std::cout << "Iteration " << iter << " complete. Objective: " << current_objective << ", Objective Diff: " << objective_diff << "\n";
@@ -275,6 +436,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     cudaFree(dev_masked_dist_matrix);
     cudaFree(dev_centroids_matrix);
     cudaFree(dev_masked_dist_sum);
+    cudaFree(dev_masked_dist_sum_accum);
     cudaFree(dev_counts);
     cudaFree(dev_data_matrix);
 

@@ -10,7 +10,7 @@
 template <typename T>
 class LIBSVMReader {
   public:
-    LIBSVMReader(const std::string filename): filename(filename) {
+    LIBSVMReader(const std::string filename, int max_rows = -1): filename(filename) {
         file.open(filename);
         if (!file.is_open()) {
             std::cerr << "Error opening file: " << filename << "\n";
@@ -20,7 +20,7 @@ class LIBSVMReader {
             size = 0;
             return;
         }
-        readMetadata();
+        readMetadata(max_rows);
     }
     void loadData(Matrix<float>& dataset, Matrix<int>& labels, int max_rows = -1) {
         std::string line;
@@ -96,14 +96,13 @@ class LIBSVMReader {
     int ncols;
     int nnz; // number of non-zero entries
     int size; // total size of the data array
-    void readMetadata(){
+    void readMetadata(int max_rows = -1) {
         nrows = 0;
         ncols = 0;
         nnz = 0;
         std::string line;
         while (std::getline(file, line)) {
             if (line.empty()) continue;
-            nrows++;
             std::istringstream iss(line);
             std::string token;
             // First token is the label
@@ -119,6 +118,8 @@ class LIBSVMReader {
                     nnz++;
                 }
             }
+            nrows++;
+            if (max_rows > 0 && nrows >= max_rows) break;
         }
         size = nrows * ncols;
         // Reset file stream to beginning for data reading

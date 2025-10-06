@@ -25,7 +25,7 @@ def parse_output(output):
     for line in lines:
         if "Fitting completed in" in line:
             parts = line.split()
-            metrics['time'] = float(parts[3])
+            metrics['time (sec.)'] = float(parts[3])
     return metrics
 
 def main():
