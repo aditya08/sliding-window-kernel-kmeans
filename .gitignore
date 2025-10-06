@@ -1,5 +1,6 @@
-# SLURM script files
+# SLURM script files and output
 *.sl
+*.out
 # CSV output files
 *.csv
 lib/
