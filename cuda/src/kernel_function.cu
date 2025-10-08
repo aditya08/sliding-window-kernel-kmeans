@@ -1,6 +1,3 @@
-// Author: Aditya Devarakonda
-// Date: August 28, 2025
-
 #include <cmath>
 
 #include "blaswrapper.cuh"

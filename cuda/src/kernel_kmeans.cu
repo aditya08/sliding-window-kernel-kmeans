@@ -1,5 +1,3 @@
-// Copyright 2025. All rights reserved.
-// author: Aditya Devarakonda
 #include <limits>
 #include <random>
 #include <algorithm>

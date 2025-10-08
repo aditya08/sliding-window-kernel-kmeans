@@ -1,6 +1,3 @@
-// Author: Aditya Devarakonda
-// Date: August 28, 2025
-
 #ifndef KERNEL_FUNCTION_CUH
 #define KERNEL_FUNCTION_CUH
 
