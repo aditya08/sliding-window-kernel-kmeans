@@ -304,7 +304,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
     // }
     // std::cout << "\n";
     while (iter < max_iters) {
-        std::cout << "Starting Iteration " << iter << "...\n";
+        std::cout << "Starting Iteration " << iter << std::endl;
         // std::copy(labels, labels + n_samples, prev_labels);
         // centroids_matrix_initialization_kernel<<<(n_samples * n_clusters + 255)/256, 256>>>(dev_centroids_matrix, n_samples, n_clusters, dev_labels);
         // counts_initialization_kernel<<<(n_samples + 255)/256, 256>>>(dev_labels, n_samples, dev_counts, n_clusters);
@@ -391,7 +391,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         // cudaMemcpy(dev_masked_dist_sum, masked_dist_sum, n_clusters * sizeof(T), cudaMemcpyHostToDevice);
         // current_objective = sampled_KV_sum;
         objective_diff = std::abs(previous_objective - current_objective);
-        std::cout << "Objective at iteration " << iter << ": " << current_objective << ", Objective diff: " << objective_diff << "\n";
+        std::cout << "Objective at iteration " << iter << ": " << current_objective << ", Objective diff: " << objective_diff << std::endl;
         // cudaStreamSynchronize(stream);
         // TODO: compute new labels
         // add masked_dist_sum[j] to each column j of dist_matrix
@@ -419,13 +419,13 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         converged = iter == max_iters - 1;
         // converged = (iter == max_iters || objective_diff < tolerance || labels_converged);
         if (converged){
-            std::cout << "Converged at iteration " << iter + 1 << "/" << max_iters << " with objective: " << current_objective << " objective diff: " << objective_diff << " labels_converged: " << labels_converged << "\n";
+            std::cout << "Converged at iteration " << iter + 1 << "/" << max_iters << " with objective: " << current_objective << " objective diff: " << objective_diff << " labels_converged: " << labels_converged << std::endl;
             // cudaMemcpy(labels, dev_labels, n_samples * sizeof(int), cudaMemcpyDeviceToHost);
             // cudaMemcpy(dist_matrix, dev_dist_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
             // cudaMemcpy(centroids_matrix, dev_centroids_matrix, n_samples * n_clusters * sizeof(T), cudaMemcpyDeviceToHost);
             break;
         }
-        std::cout << "Iteration " << iter << " complete. Objective: " << current_objective << ", Objective Diff: " << objective_diff << "\n";
+        std::cout << "Iteration " << iter << " complete. Objective: " << current_objective << ", Objective Diff: " << objective_diff << std::endl;
         iter++;
     }
     // Free device memory

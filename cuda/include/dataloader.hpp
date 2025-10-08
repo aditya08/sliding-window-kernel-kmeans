@@ -10,21 +10,17 @@
 template <typename T>
 class LIBSVMReader {
   public:
-    LIBSVMReader(const std::string filename, int max_rows = -1): filename(filename) {
+    LIBSVMReader(const std::string filename, int max_rows = -1, int max_cols = -1): filename(filename) {
+        readMetadata(max_rows, max_cols);
+    }
+    void loadData(Matrix<float>& dataset, Matrix<int>& labels, int max_rows = -1, int max_cols = -1) {
+        std::string line;
+        int row = 0, nnz = 0;
         file.open(filename);
         if (!file.is_open()) {
             std::cerr << "Error opening file: " << filename << "\n";
-            nrows = 0;
-            ncols = 0;
-            nnz = 0;
-            size = 0;
             return;
         }
-        readMetadata(max_rows);
-    }
-    void loadData(Matrix<float>& dataset, Matrix<int>& labels, int max_rows = -1) {
-        std::string line;
-        int row = 0, nnz = 0;
         // const int* labels_dataptr = labels.getDataPtr();
         // const float* data_dataptr = dataset.getDataPtr();
         while (std::getline(file, line)) {
@@ -39,6 +35,7 @@ class LIBSVMReader {
                 size_t pos = token.find(':');
                 if (pos != std::string::npos) {
                     col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
+                    if (max_cols > 0 && col >= max_cols) continue;
                     T value = static_cast<T>(std::stof(token.substr(pos + 1)));
                     dataset.setValue(row, col, value);
                     nnz++;
@@ -48,11 +45,18 @@ class LIBSVMReader {
             row++;
             if (max_rows > 0 && row >= max_rows) break;
         }
+        file.close();
     }
 
-    void loadData(Matrix<double>& dataset, Matrix<int>& labels, int max_rows = -1) {
+    void loadData(Matrix<double>& dataset, Matrix<int>& labels, int max_rows = -1, int max_cols = -1) {
         std::string line;
         int row = 0, nnz = 0;
+        file.open(filename);
+        if (!file.is_open()) {
+            std::cerr << "Error opening file: " << filename << "\n";
+            return;
+        }
+
         // const int* labels_dataptr = labels.getDataPtr();
         const double* data_dataptr = dataset.getDataPtr();
         while (std::getline(file, line)) {
@@ -67,6 +71,7 @@ class LIBSVMReader {
                 size_t pos = token.find(':');
                 if (pos != std::string::npos) {
                     col = std::stoi(token.substr(0, pos)) - 1; // Convert to 0-based index
+                    if (max_cols > 0 && col >= max_cols) continue;
                     T value = static_cast<T>(std::stod(token.substr(pos + 1)));
                     dataset.setValue(row, col, value);
                     nnz++;
@@ -76,6 +81,7 @@ class LIBSVMReader {
             row++;
             if (max_rows > 0 && row >= max_rows) break;
         }
+        file.close();
     }
 
     int getNumRows() const { return nrows; }
@@ -96,10 +102,15 @@ class LIBSVMReader {
     int ncols;
     int nnz; // number of non-zero entries
     int size; // total size of the data array
-    void readMetadata(int max_rows = -1) {
+    void readMetadata(int max_rows = -1, int max_cols = -1) {
         nrows = 0;
         ncols = 0;
         nnz = 0;
+        file.open(filename); // Reopen the file for reading metadata
+        if (!file.is_open()) {
+            std::cerr << "Error opening file: " << filename << "\n";
+            return;
+        }
         std::string line;
         while (std::getline(file, line)) {
             if (line.empty()) continue;
@@ -112,7 +123,8 @@ class LIBSVMReader {
                 size_t pos = token.find(':');
                 if (pos != std::string::npos) {
                     int index = std::stoi(token.substr(0, pos));
-                    if (index > ncols) {
+                    if (max_cols > 0 && index > max_cols) continue;
+                    else if (index > ncols) {
                         ncols = index;
                     }
                     nnz++;
@@ -123,8 +135,7 @@ class LIBSVMReader {
         }
         size = nrows * ncols;
         // Reset file stream to beginning for data reading
-        file.clear();
-        file.seekg(0, std::ios::beg);
+        file.close(); // Close the file after reading metadata
     }
 };
 

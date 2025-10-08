@@ -3,7 +3,7 @@ import pandas as pd
 import subprocess
 import os
 
-def run_experiment(application_path, data_path, n_clusters, block_size, max_iters, tol, seed, max_rows, kernel):
+def run_experiment(application_path, data_path, n_clusters, block_size, max_iters, tol, seed, max_rows, max_cols, kernel):
     command = [
         application_path,
         "--data", data_path,
@@ -13,6 +13,7 @@ def run_experiment(application_path, data_path, n_clusters, block_size, max_iter
         "--tol", str(tol),
         "--seed", str(seed),
         "--max_rows", str(max_rows),
+        "--max_cols", str(max_cols),  # Limit to first 1000 columns for faster experiments
         "--kernel", str(kernel)
     ]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -39,6 +40,7 @@ def main():
     parser.add_argument("--tol", type=float, default=1e-4, help="Tolerance for convergence")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for initialization")
     parser.add_argument("--max_rows", type=int, default=2**17, help="Maximum number of rows to load from the dataset")
+    parser.add_argument("--max_cols", type=int, default=-1, help="Maximum number of columns to load from the dataset")
     parser.add_argument("--kernel", type=str, default="polynomial", choices=["linear", "polynomial"], help="Kernel type to use")
     parser.add_argument("--output_csv", type=str, default="ablation_study_results.csv", help="Output CSV file for results")
 
@@ -58,6 +60,7 @@ def main():
                 tol=args.tol,
                 seed=args.seed,
                 max_rows=args.max_rows,
+                max_cols=args.max_cols,
                 kernel=args.kernel
             )
             metrics = parse_output(output)
@@ -65,6 +68,7 @@ def main():
                 'n_clusters': n_clusters,
                 'block_size': block_size,
                 'max_rows': args.max_rows,
+                'max_cols': args.max_cols,
                 'kernel': args.kernel
             })
             results.append(metrics)
