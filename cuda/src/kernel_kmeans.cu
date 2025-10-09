@@ -407,7 +407,7 @@ __host__ void KernelKMeans<T>::fit(Matrix<T>& data, const int n_samples, const i
         }
         // find argmin along each row
         int min_index;
-        #pragma omp parallel for schedule(static)
+        #pragma omp parallel for schedule(static) private(min_index)
         for (int i = 0; i < n_samples; i++) {
             T* min_elem = std::min_element(dist_matrix + i * n_clusters, dist_matrix + (i + 1) * n_clusters);
             min_index = std::distance(dist_matrix + i * n_clusters, min_elem);
